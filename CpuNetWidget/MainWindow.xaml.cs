@@ -20,8 +20,6 @@ public partial class MainWindow : Window
     private const string RegistryValueName = "CpuNetWidget";
     private const double CompactWidth = 50;
     private const double CompactHeight = 228;
-    private const double DockThickness = 7;
-    private const double DockLength = 50;
     private const double RestoreInset = 32;
     private static readonly System.Windows.Media.Brush CpuNormalBrush = CreateFrozenBrush(84, 214, 167);
     private static readonly System.Windows.Media.Brush WarningBrush = CreateFrozenBrush(255, 184, 108);
@@ -31,7 +29,6 @@ public partial class MainWindow : Window
     private readonly NetworkSpeedReader _networkSpeedReader = new();
     private readonly CpuTemperatureReader? _temperatureReader;
     private readonly DispatcherTimer _timer;
-    private readonly DispatcherTimer _edgeDockTimer;
     private readonly Forms.NotifyIcon _notifyIcon;
     private readonly Forms.ContextMenuStrip _contextMenu;
     private readonly List<HistorySample> _history = [];
@@ -42,13 +39,13 @@ public partial class MainWindow : Window
     private double _expandedWindowWidth = 390;
     private bool _compactDragPending;
     private System.Windows.Point _compactDragStart;
-    private bool _isEdgeDocked;
+    private DockedStripWindow? _dockedStripWindow;
     private DockEdge _dockedEdge;
     private double _dockAnchor;
-    private long _suppressEdgeDockUntilTimestamp;
     private bool _settingsWindowOpen;
     private bool _isExiting;
     private bool _refreshFailureLogged;
+    private bool IsEdgeDocked => _dockedStripWindow is not null;
     private TimeSpan ChartRange => TimeSpan.FromMinutes(_settings.ChartRangeMinutes);
 
     public MainWindow()
@@ -70,7 +67,7 @@ public partial class MainWindow : Window
 
         _contextMenu = new Forms.ContextMenuStrip();
         _contextMenu.Items.Add("显示悬浮窗", null, (_, _) => ShowWidget());
-        _contextMenu.Items.Add("隐藏悬浮窗", null, (_, _) => Dispatcher.Invoke(Hide));
+        _contextMenu.Items.Add("隐藏悬浮窗", null, (_, _) => Dispatcher.Invoke(HideWidget));
         _contextMenu.Items.Add("切换窗口模式", null, (_, _) =>
             Dispatcher.Invoke(() => SetCompactMode(!_settings.CompactMode)));
         _contextMenu.Items.Add(new Forms.ToolStripSeparator());
@@ -89,23 +86,6 @@ public partial class MainWindow : Window
 
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += async (_, _) => await RefreshMetricsAsync();
-
-        _edgeDockTimer = new DispatcherTimer(DispatcherPriority.Background)
-        {
-            Interval = TimeSpan.FromMilliseconds(220)
-        };
-        _edgeDockTimer.Tick += (_, _) =>
-        {
-            _edgeDockTimer.Stop();
-            TryDockToScreenEdge();
-        };
-        LocationChanged += (_, _) =>
-        {
-            if (!IsLoaded || !IsVisible || WindowState != WindowState.Normal
-                || !_settings.CompactMode || _isEdgeDocked) return;
-            _edgeDockTimer.Stop();
-            _edgeDockTimer.Start();
-        };
 
         Loaded += async (_, _) =>
         {
@@ -286,19 +266,13 @@ public partial class MainWindow : Window
 
     private void ApplyWindowMode()
     {
-        if (!_settings.CompactMode || !_settings.AutoHideAtScreenEdge) _isEdgeDocked = false;
-        FullPanel.Visibility = !_settings.CompactMode ? Visibility.Visible : Visibility.Collapsed;
-        CompactPanel.Visibility = _settings.CompactMode && !_isEdgeDocked
-            ? Visibility.Visible : Visibility.Collapsed;
-        DockedStripPanel.Visibility = _settings.CompactMode && _isEdgeDocked
-            ? Visibility.Visible : Visibility.Collapsed;
-        if (!IsLoaded) return;
-
-        if (_isEdgeDocked)
+        if (!_settings.CompactMode || !_settings.AutoHideAtScreenEdge)
         {
-            ApplyDockedDimensions(GetCurrentWorkingArea());
-            return;
+            CloseDockedStrip();
         }
+        FullPanel.Visibility = !_settings.CompactMode ? Visibility.Visible : Visibility.Collapsed;
+        CompactPanel.Visibility = _settings.CompactMode ? Visibility.Visible : Visibility.Collapsed;
+        if (!IsLoaded || IsEdgeDocked) return;
 
         if (_settings.CompactMode)
         {
@@ -322,7 +296,11 @@ public partial class MainWindow : Window
 
     private void SetCompactMode(bool compact)
     {
-        if (!compact) _isEdgeDocked = false;
+        if (IsEdgeDocked)
+        {
+            CloseDockedStrip();
+            Show();
+        }
         _settings.CompactMode = compact;
         _settings.Save();
         ApplyWindowMode();
@@ -401,6 +379,7 @@ public partial class MainWindow : Window
     private async Task OpenSettingsAsync()
     {
         if (_settingsWindowOpen || _isExiting) return;
+        if (IsEdgeDocked) RestoreFromDock(activate: false);
         _settingsWindowOpen = true;
         try
         {
@@ -538,8 +517,7 @@ public partial class MainWindow : Window
         CompactPanel.ReleaseMouseCapture();
         if (TryDragMove())
         {
-            // DragMove returns before Windows has always committed the final move/size messages.
-            // Defer docking so the native drag loop cannot restore the old compact dimensions.
+            // Check once after Windows commits the final position from the native drag loop.
             Dispatcher.BeginInvoke(TryDockToScreenEdge, DispatcherPriority.ContextIdle);
         }
         e.Handled = true;
@@ -568,9 +546,8 @@ public partial class MainWindow : Window
 
     private void TryDockToScreenEdge()
     {
-        if (_isEdgeDocked || !IsVisible || WindowState != WindowState.Normal
-            || !_settings.CompactMode || !_settings.AutoHideAtScreenEdge
-            || Stopwatch.GetTimestamp() < _suppressEdgeDockUntilTimestamp) return;
+        if (IsEdgeDocked || !IsVisible || WindowState != WindowState.Normal
+            || !_settings.CompactMode || !_settings.AutoHideAtScreenEdge) return;
 
         if (!TryGetWindowPixelBounds(out var bounds, out var workingArea)) return;
 
@@ -587,10 +564,7 @@ public partial class MainWindow : Window
         _dockAnchor = _dockedEdge is DockEdge.Left or DockEdge.Right
             ? Top + ActualHeight / 2
             : Left + ActualWidth / 2;
-        _isEdgeDocked = true;
-        CompactPanel.Visibility = Visibility.Collapsed;
-        DockedStripPanel.Visibility = Visibility.Visible;
-        ApplyDockedDimensions(GetCurrentWorkingArea());
+        ShowDockedStrip();
 
         void SelectExceededEdge(DockEdge edge, int overflow)
         {
@@ -600,36 +574,26 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ApplyDockedDimensions(Rect area)
+    private void ShowDockedStrip()
     {
-        ResizeMode = ResizeMode.NoResize;
-        if (_dockedEdge is DockEdge.Left or DockEdge.Right)
+        CloseDockedStrip();
+        var strip = new DockedStripWindow(
+            _dockedEdge, _dockAnchor, GetCurrentWorkingArea(), _settings.AlwaysOnTop);
+        strip.RestoreRequested += DockedStrip_RestoreRequested;
+        try
         {
-            MinWidth = DockThickness;
-            MinHeight = DockLength;
-            Width = DockThickness;
-            Height = DockLength;
-            Top = Math.Clamp(_dockAnchor - DockLength / 2, area.Top, area.Bottom - DockLength);
-            Left = _dockedEdge == DockEdge.Left ? area.Left : area.Right - DockThickness;
-            DockedStripBorder.CornerRadius = _dockedEdge == DockEdge.Left
-                ? new CornerRadius(0, 5, 5, 0)
-                : new CornerRadius(5, 0, 0, 5);
+            strip.Show();
+            _dockedStripWindow = strip;
+            Hide();
         }
-        else
+        catch (Exception exception)
         {
-            MinWidth = DockLength;
-            MinHeight = DockThickness;
-            Width = DockLength;
-            Height = DockThickness;
-            Left = Math.Clamp(_dockAnchor - DockLength / 2, area.Left, area.Right - DockLength);
-            Top = _dockedEdge == DockEdge.Top ? area.Top : area.Bottom - DockThickness;
-            DockedStripBorder.CornerRadius = _dockedEdge == DockEdge.Top
-                ? new CornerRadius(0, 0, 5, 5)
-                : new CornerRadius(5, 5, 0, 0);
+            strip.RestoreRequested -= DockedStrip_RestoreRequested;
+            try { strip.Close(); }
+            catch { /* The original window creation error is more useful. */ }
+            AppDiagnostics.Log("创建贴边灰条窗口失败。", exception);
+            KeepInsideWorkingArea();
         }
-
-        UpdateLayout();
-        ApplyNativeWindowBounds();
     }
 
     private bool TryGetWindowPixelBounds(out NativeRect bounds, out System.Drawing.Rectangle workingArea)
@@ -646,31 +610,15 @@ public partial class MainWindow : Window
         return false;
     }
 
-    private void ApplyNativeWindowBounds()
-    {
-        var handle = new WindowInteropHelper(this).Handle;
-        if (handle == IntPtr.Zero) return;
+    private void DockedStrip_RestoreRequested(object? sender, EventArgs e) => RestoreFromDock(activate: true);
 
-        var dpi = VisualTreeHelper.GetDpi(this);
-        var x = (int)Math.Round(Left * dpi.DpiScaleX);
-        var y = (int)Math.Round(Top * dpi.DpiScaleY);
-        var width = Math.Max(1, (int)Math.Round(Width * dpi.DpiScaleX));
-        var height = Math.Max(1, (int)Math.Round(Height * dpi.DpiScaleY));
-        if (!SetWindowPos(handle, IntPtr.Zero, x, y, width, height,
-                SetWindowPositionFlags.NoActivate | SetWindowPositionFlags.NoZOrder))
-        {
-            AppDiagnostics.Log("设置贴边灰条窗口尺寸失败。",
-                new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error()));
-        }
-    }
-
-    private void DockedStripPanel_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private void RestoreFromDock(bool activate)
     {
-        if (e.ButtonState != MouseButtonState.Pressed) return;
+        if (!IsEdgeDocked) return;
         var edge = _dockedEdge;
         var anchor = _dockAnchor;
-        _isEdgeDocked = false;
-        _suppressEdgeDockUntilTimestamp = Stopwatch.GetTimestamp() + Stopwatch.Frequency;
+        CloseDockedStrip();
+        Show();
         ApplyWindowMode();
 
         var area = GetCurrentWorkingArea();
@@ -693,7 +641,17 @@ public partial class MainWindow : Window
                 Top = area.Bottom - CompactHeight - RestoreInset;
                 break;
         }
-        e.Handled = true;
+        KeepInsideWorkingArea();
+        if (activate) Activate();
+    }
+
+    private void CloseDockedStrip()
+    {
+        var strip = _dockedStripWindow;
+        if (strip is null) return;
+        _dockedStripWindow = null;
+        strip.RestoreRequested -= DockedStrip_RestoreRequested;
+        strip.Close();
     }
 
     private void ChartCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => RenderChart();
@@ -710,7 +668,12 @@ public partial class MainWindow : Window
 
     private void MinimizeToTray()
     {
-        _edgeDockTimer.Stop();
+        HideWidget();
+    }
+
+    private void HideWidget()
+    {
+        CloseDockedStrip();
         Hide();
         WindowState = WindowState.Normal;
     }
@@ -719,6 +682,11 @@ public partial class MainWindow : Window
     {
         Dispatcher.Invoke(() =>
         {
+            if (IsEdgeDocked)
+            {
+                RestoreFromDock(activate: true);
+                return;
+            }
             Show();
             WindowState = WindowState.Normal;
             Activate();
@@ -799,7 +767,7 @@ public partial class MainWindow : Window
         if (!_reallyClose)
         {
             e.Cancel = true;
-            Hide();
+            HideWidget();
             _notifyIcon.ShowBalloonTip(1500, "CPU 网速悬浮窗",
                 "程序仍在托盘运行，双击托盘图标可恢复。", Forms.ToolTipIcon.Info);
             return;
@@ -813,7 +781,6 @@ public partial class MainWindow : Window
         _isExiting = true;
         _reallyClose = true;
         _timer.Stop();
-        _edgeDockTimer.Stop();
         try
         {
             _temperatureReader?.Dispose();
@@ -824,6 +791,8 @@ public partial class MainWindow : Window
         }
         finally
         {
+            try { CloseDockedStrip(); }
+            catch (Exception exception) { AppDiagnostics.Log("关闭贴边灰条失败。", exception); }
             try
             {
                 _notifyIcon.Visible = false;
@@ -852,11 +821,6 @@ public partial class MainWindow : Window
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetWindowRect(IntPtr windowHandle, out NativeRect rectangle);
 
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetWindowPos(IntPtr windowHandle, IntPtr insertAfter,
-        int x, int y, int width, int height, SetWindowPositionFlags flags);
-
     private readonly record struct HistorySample(double? Download, double? Upload, long Timestamp);
 
     [StructLayout(LayoutKind.Sequential)]
@@ -868,12 +832,4 @@ public partial class MainWindow : Window
         public readonly int Bottom;
     }
 
-    [Flags]
-    private enum SetWindowPositionFlags : uint
-    {
-        NoZOrder = 0x0004,
-        NoActivate = 0x0010
-    }
-
-    private enum DockEdge { Left, Right, Top, Bottom }
 }

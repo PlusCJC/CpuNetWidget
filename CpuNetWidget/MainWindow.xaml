@@ -246,15 +246,5 @@
         </Grid>
     </Grid>
 
-    <Grid x:Name="DockedStripPanel" Visibility="Collapsed"
-          MouseLeftButtonDown="DockedStripPanel_MouseLeftButtonDown"
-          ToolTip="点击恢复监控条">
-        <Border x:Name="DockedStripBorder" Background="#B9BEC7" BorderBrush="#D7DBE1"
-                BorderThickness="1" CornerRadius="5">
-            <Border.Effect>
-                <DropShadowEffect Color="#000000" BlurRadius="8" ShadowDepth="1" Opacity="0.28" />
-            </Border.Effect>
-        </Border>
-    </Grid>
     </Grid>
 </Window>

@@ -1,0 +1,19 @@
+<Window x:Class="CpuNetWidget.DockedStripWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:ClassModifier="internal"
+        Title="CPU 网速悬浮窗"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown"
+        ToolTip="点击恢复监控条">
+    <Border x:Name="StripBorder"
+            Background="#B9BEC7"
+            BorderBrush="#D7DBE1"
+            BorderThickness="1"
+            SnapsToDevicePixels="True" />
+</Window>

@@ -1,6 +1,6 @@
 #define MyAppId "{{9A27E520-6C14-43E6-91E7-8C604DCA81BE}"
 #define MyAppName "CPU 网速悬浮窗"
-#define MyAppVersion "1.0.2"
+#define MyAppVersion "1.0.3"
 #define MyAppPublisher "CpuNetWidget"
 #define MyAppExeName "CpuNetWidget.exe"
 
@@ -8,7 +8,7 @@
 AppId={#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-VersionInfoVersion=1.0.2.0
+VersionInfoVersion=1.0.3.0
 AppPublisher={#MyAppPublisher}
 DefaultDirName={localappdata}\Programs\CpuNetWidget
 DisableDirPage=no

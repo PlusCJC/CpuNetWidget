@@ -48,7 +48,7 @@ Windows 可能对未进行商业代码签名的本地 EXE 显示 SmartScreen 提
 - 双击恢复完整面板；
 - 右键打开托盘菜单；
 - 仅当监控条的左、右、上或下边界真正越过当前显示器工作区时才会自动收起；仍在屏幕内部或刚好接触边缘时不会触发；
-- 左右边缘收起为 `7 × 50 DIP` 灰条，上下边缘收起为 `50 × 7 DIP` 灰条；
+- 收起时会隐藏主监控窗，并使用独立窗口显示灰条；左右边缘为 `7 × 50 DIP`，上下边缘为 `50 × 7 DIP`；
 - 点击灰条后，监控条会在距离边缘 32 DIP 的位置恢复。
 
 DIP 是 Windows 与缩放比例无关的界面单位。例如在 125% 缩放下，迷你监控条约为 `63 × 285 px`，灰条约为 `9 × 63 px`。
@@ -170,7 +170,7 @@ NuGet 官方源暂时不可访问、且已经单独完成漏洞检查时，可�
 Installer\CpuNetWidget.iss
 ```
 
-当前安装器版本为 `1.0.2`。
+当前安装器版本为 `1.0.3`。
 
 安装 [Inno Setup 6](https://jrsoftware.org/isdl.php) 后，在 PowerShell 中执行：
 
@@ -251,6 +251,8 @@ CpuNetWidget/
   AppDiagnostics.cs                  有限大小的本地诊断日志
   AppSettings.cs                     当前用户设置持久化
   MainWindow.xaml(.cs)               主界面、曲线、托盘与贴边逻辑
+  DockedStripWindow.xaml(.cs)        独立的贴边灰条窗口
+  DockEdge.cs                        贴边方向定义
   SettingsWindow.xaml(.cs)           设置界面
   PrivilegeHelper.cs                 管理员权限检测与 UAC 重启
   Monitoring/CpuUsageReader.cs       CPU 使用率
