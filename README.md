@@ -261,6 +261,7 @@ Installer/CpuNetWidget.iss            安装、快捷方式与卸载清理规则
 THIRD-PARTY-NOTICES.txt               第三方组件说明
 SECURITY.md                           安全与隐私说明
 AUDIT.md                              最近一次代码审计记录
+LICENSE                               项目 MIT 许可证
 ```
 
 ## 已知限制
@@ -280,6 +281,12 @@ AUDIT.md                              最近一次代码审计记录
 ```powershell
 dotnet list .\CpuNetWidget\CpuNetWidget.csproj package --vulnerable --include-transitive
 ```
+
+## 许可证
+
+本项目自身代码采用 [MIT License](LICENSE)。你可以使用、复制、修改、发布和分发代码，但必须在副本或主要代码中保留原始版权及许可声明。
+
+项目引用的第三方组件继续适用各自的许可证；`LibreHardwareMonitorLib` 的 MPL-2.0 声明和来源信息见 `THIRD-PARTY-NOTICES.txt`。
 
 ## Git 历史
 
