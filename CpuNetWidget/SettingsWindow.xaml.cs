@@ -99,6 +99,13 @@ public partial class SettingsWindow : Window
         DialogResult = true;
     }
 
-    private sealed record SensorChoice(string? Id, string DisplayName);
-    private sealed record ChartRangeChoice(int Minutes, string DisplayName);
+    private sealed record SensorChoice(string? Id, string DisplayName)
+    {
+        public override string ToString() => DisplayName;
+    }
+
+    private sealed record ChartRangeChoice(int Minutes, string DisplayName)
+    {
+        public override string ToString() => DisplayName;
+    }
 }

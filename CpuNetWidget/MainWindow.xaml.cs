@@ -291,11 +291,7 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void MenuButton_Click(object sender, RoutedEventArgs e)
-    {
-        var point = PointToScreen(new System.Windows.Point(ActualWidth - 12, 34));
-        _contextMenu.Show((int)point.X, (int)point.Y);
-    }
+    private async void SettingsButton_Click(object sender, RoutedEventArgs e) => await OpenSettingsAsync();
 
     private void ChartCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => RenderChart();
 
