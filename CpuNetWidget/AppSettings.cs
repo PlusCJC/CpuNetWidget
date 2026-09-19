@@ -14,6 +14,7 @@ internal sealed class AppSettings
     public bool AlwaysOnTop { get; set; } = true;
     public bool RunAsAdministrator { get; set; }
     public int ChartRangeMinutes { get; set; } = 1;
+    public bool ShowNetworkChart { get; set; } = true;
 
     public static AppSettings Load()
     {
@@ -31,6 +32,7 @@ internal sealed class AppSettings
             settings.AlwaysOnTop = ReadBoolean(key, nameof(AlwaysOnTop), true);
             settings.RunAsAdministrator = ReadBoolean(key, nameof(RunAsAdministrator), false);
             settings.ChartRangeMinutes = ReadChartRange(key);
+            settings.ShowNetworkChart = ReadBoolean(key, nameof(ShowNetworkChart), true);
         }
         catch
         {
@@ -52,6 +54,7 @@ internal sealed class AppSettings
             key.SetValue(nameof(AlwaysOnTop), AlwaysOnTop ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue(nameof(RunAsAdministrator), RunAsAdministrator ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue(nameof(ChartRangeMinutes), ChartRangeMinutes, RegistryValueKind.DWord);
+            key.SetValue(nameof(ShowNetworkChart), ShowNetworkChart ? 1 : 0, RegistryValueKind.DWord);
 
             if (string.IsNullOrWhiteSpace(TemperatureSensorId))
                 key.DeleteValue(nameof(TemperatureSensorId), throwOnMissingValue: false);

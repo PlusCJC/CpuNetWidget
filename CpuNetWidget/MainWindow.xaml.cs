@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private AppSettings _settings;
     private bool _reallyClose;
     private int _updateInProgress;
+    private double _expandedWindowHeight = 330;
     private int HistoryCapacity => _settings.ChartRangeMinutes * 60;
 
     public MainWindow()
@@ -92,11 +93,12 @@ public partial class MainWindow : Window
                     _settings.MonitorTemperature ? "温度模块不可用" : "监控已关闭", null);
 
             UpdateMetricValues(cpuUsage, temperature, network);
-            AddHistory(new HistorySample(
-                cpuUsage,
-                temperature.Celsius,
-                _settings.MonitorDownload ? network?.DownloadBytesPerSecond : null,
-                _settings.MonitorUpload ? network?.UploadBytesPerSecond : null));
+            if (_settings.ShowNetworkChart)
+            {
+                AddHistory(new HistorySample(
+                    _settings.MonitorDownload ? network?.DownloadBytesPerSecond : null,
+                    _settings.MonitorUpload ? network?.UploadBytesPerSecond : null));
+            }
             UpdateTrayText(cpuUsage, temperature, network);
         }
         finally
@@ -151,10 +153,31 @@ public partial class MainWindow : Window
         SetPanelState(UploadPanel, UploadText, _settings.MonitorUpload, "0 B/s");
         TemperatureHint.Text = _settings.MonitorTemperature ? "正在读取传感器" : "监控已关闭";
 
-        CpuLine.Visibility = _settings.MonitorCpu ? Visibility.Visible : Visibility.Collapsed;
-        TemperatureLine.Visibility = _settings.MonitorTemperature ? Visibility.Visible : Visibility.Collapsed;
-        DownloadLine.Visibility = _settings.MonitorDownload ? Visibility.Visible : Visibility.Collapsed;
-        UploadLine.Visibility = _settings.MonitorUpload ? Visibility.Visible : Visibility.Collapsed;
+        DownloadLine.Visibility = _settings.ShowNetworkChart && _settings.MonitorDownload
+            ? Visibility.Visible : Visibility.Collapsed;
+        UploadLine.Visibility = _settings.ShowNetworkChart && _settings.MonitorUpload
+            ? Visibility.Visible : Visibility.Collapsed;
+        ApplyChartVisibility();
+    }
+
+    private void ApplyChartVisibility()
+    {
+        ChartPanel.Visibility = _settings.ShowNetworkChart ? Visibility.Visible : Visibility.Collapsed;
+        ChartSeparator.Visibility = _settings.ShowNetworkChart ? Visibility.Visible : Visibility.Collapsed;
+        ChartRow.Height = _settings.ShowNetworkChart ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+
+        if (!IsLoaded) return;
+        if (_settings.ShowNetworkChart)
+        {
+            MinHeight = 300;
+            Height = Math.Max(330, _expandedWindowHeight);
+        }
+        else
+        {
+            if (Height >= 300) _expandedWindowHeight = Height;
+            MinHeight = 190;
+            Height = 190;
+        }
     }
 
     private static void SetPanelState(StackPanel panel, TextBlock valueText, bool enabled,
@@ -178,11 +201,17 @@ public partial class MainWindow : Window
 
     private void RenderChart()
     {
+        ChartTitleText.Text = $"实时网速 · 最近 {_settings.ChartRangeMinutes} 分钟";
+        if (!_settings.ShowNetworkChart)
+        {
+            DownloadLine.Points.Clear();
+            UploadLine.Points.Clear();
+            return;
+        }
+
         var width = ChartCanvas.ActualWidth;
         var height = ChartCanvas.ActualHeight;
         if (width <= 1 || height <= 1 || _history.Count == 0) return;
-
-        ChartTitleText.Text = $"实时曲线 · 最近 {_settings.ChartRangeMinutes} 分钟";
 
         var networkMaximum = _history
             .SelectMany(sample => new[] { sample.Download, sample.Upload })
@@ -192,9 +221,6 @@ public partial class MainWindow : Window
             .Max();
         networkMaximum = Math.Max(1024, networkMaximum);
 
-        CpuLine.Points = BuildPoints(sample => sample.Cpu, value => value / 100.0, width, height);
-        TemperatureLine.Points = BuildPoints(sample => sample.Temperature,
-            value => (value - 20.0) / 80.0, width, height);
         DownloadLine.Points = BuildPoints(sample => sample.Download,
             value => value / networkMaximum, width, height);
         UploadLine.Points = BuildPoints(sample => sample.Upload,
@@ -392,5 +418,5 @@ public partial class MainWindow : Window
         System.Windows.Application.Current.Shutdown();
     }
 
-    private readonly record struct HistorySample(double? Cpu, double? Temperature, double? Download, double? Upload);
+    private readonly record struct HistorySample(double? Download, double? Upload);
 }

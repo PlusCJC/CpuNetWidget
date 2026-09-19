@@ -26,15 +26,10 @@ public partial class SettingsWindow : Window
         AdministratorCheckBox.IsChecked = settings.RunAsAdministrator;
         TopmostCheckBox.IsChecked = settings.AlwaysOnTop;
         AutoStartCheckBox.IsChecked = autoStartEnabled;
-
-        var chartRanges = new[]
-        {
-            new ChartRangeChoice(1, "1 分钟"),
-            new ChartRangeChoice(5, "5 分钟"),
-            new ChartRangeChoice(10, "10 分钟")
-        };
-        ChartRangeComboBox.ItemsSource = chartRanges;
-        ChartRangeComboBox.SelectedItem = chartRanges.First(choice => choice.Minutes == settings.ChartRangeMinutes);
+        ShowNetworkChartCheckBox.IsChecked = settings.ShowNetworkChart;
+        ChartRange1Radio.IsChecked = settings.ChartRangeMinutes == 1;
+        ChartRange5Radio.IsChecked = settings.ChartRangeMinutes == 5;
+        ChartRange10Radio.IsChecked = settings.ChartRangeMinutes == 10;
 
         var choices = new List<SensorChoice> { new(null, "自动选择（推荐）") };
         choices.AddRange(sensors.Select(sensor => new SensorChoice(sensor.Id, sensor.DisplayName)));
@@ -52,9 +47,12 @@ public partial class SettingsWindow : Window
             ? "当前状态：正在使用管理员权限运行"
             : "当前状态：普通用户权限";
         UpdateTemperatureControls();
+        UpdateChartControls();
     }
 
     private void TemperatureMonitoring_Changed(object sender, RoutedEventArgs e) => UpdateTemperatureControls();
+
+    private void ChartEnabled_Changed(object sender, RoutedEventArgs e) => UpdateChartControls();
 
     private void Window_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -82,6 +80,12 @@ public partial class SettingsWindow : Window
             TemperatureSensorComboBox.IsEnabled = MonitorTemperatureCheckBox.IsChecked == true;
     }
 
+    private void UpdateChartControls()
+    {
+        if (ChartRangePanel is not null)
+            ChartRangePanel.IsEnabled = ShowNetworkChartCheckBox.IsChecked == true;
+    }
+
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
         ResultSettings = new AppSettings
@@ -93,18 +97,15 @@ public partial class SettingsWindow : Window
             TemperatureSensorId = (TemperatureSensorComboBox.SelectedItem as SensorChoice)?.Id,
             RunAsAdministrator = AdministratorCheckBox.IsChecked == true,
             AlwaysOnTop = TopmostCheckBox.IsChecked == true,
-            ChartRangeMinutes = (ChartRangeComboBox.SelectedItem as ChartRangeChoice)?.Minutes ?? 1
+            ShowNetworkChart = ShowNetworkChartCheckBox.IsChecked == true,
+            ChartRangeMinutes = ChartRange10Radio.IsChecked == true ? 10
+                : ChartRange5Radio.IsChecked == true ? 5 : 1
         };
         AutoStartEnabled = AutoStartCheckBox.IsChecked == true;
         DialogResult = true;
     }
 
     private sealed record SensorChoice(string? Id, string DisplayName)
-    {
-        public override string ToString() => DisplayName;
-    }
-
-    private sealed record ChartRangeChoice(int Minutes, string DisplayName)
     {
         public override string ToString() => DisplayName;
     }

@@ -68,7 +68,7 @@
                 <RowDefinition Height="10" />
                 <RowDefinition Height="53" />
                 <RowDefinition Height="12" />
-                <RowDefinition Height="*" />
+                <RowDefinition x:Name="ChartRow" Height="*" />
             </Grid.RowDefinitions>
 
             <Grid Grid.Row="0">
@@ -129,20 +129,27 @@
                 </StackPanel>
             </Grid>
 
-            <Border Grid.Row="4" Height="1" Background="#2D384B" VerticalAlignment="Center" />
+            <Border x:Name="ChartSeparator" Grid.Row="4" Height="1"
+                    Background="#2D384B" VerticalAlignment="Center" />
 
-            <Grid Grid.Row="5">
+            <Grid x:Name="ChartPanel" Grid.Row="5">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="25" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
                 <Grid Grid.Row="0">
-                    <TextBlock x:Name="ChartTitleText" Text="实时曲线 · 最近 1 分钟"
-                               FontSize="10.5" Foreground="#8E9AAE" />
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="ChartTitleText" Text="实时网速 · 最近 1 分钟"
+                                   FontSize="10.5" Foreground="#8E9AAE" />
+                        <Ellipse Width="6" Height="6" Fill="#74B9FF" Margin="12,4,4,0" VerticalAlignment="Top" />
+                        <TextBlock Text="下载" FontSize="9.5" Foreground="#74B9FF" />
+                        <Ellipse Width="6" Height="6" Fill="#FFB86C" Margin="9,4,4,0" VerticalAlignment="Top" />
+                        <TextBlock Text="上传" FontSize="9.5" Foreground="#FFB86C" />
+                    </StackPanel>
                     <TextBlock x:Name="NetworkScaleText" HorizontalAlignment="Right" FontSize="9.5"
                                Foreground="#69768B" Text="网络峰值 --" />
                 </Grid>
-                <Border Grid.Row="1" CornerRadius="6" Background="#401C2636" ClipToBounds="True">
+                <Border Grid.Row="1" CornerRadius="6" Background="#1C2636" ClipToBounds="True">
                     <Grid>
                         <Grid Opacity="0.48">
                             <Grid.RowDefinitions>
@@ -156,8 +163,6 @@
                             <Border Grid.Row="3" BorderBrush="#344056" BorderThickness="0,1,0,0" />
                         </Grid>
                         <Canvas x:Name="ChartCanvas" ClipToBounds="True" SizeChanged="ChartCanvas_SizeChanged">
-                            <Polyline x:Name="CpuLine" Stroke="#54D6A7" StrokeThickness="1.8" />
-                            <Polyline x:Name="TemperatureLine" Stroke="#FF6B6B" StrokeThickness="1.8" />
                             <Polyline x:Name="DownloadLine" Stroke="#74B9FF" StrokeThickness="1.8" />
                             <Polyline x:Name="UploadLine" Stroke="#FFB86C" StrokeThickness="1.8" />
                         </Canvas>

@@ -16,6 +16,42 @@
             <Setter Property="Foreground" Value="#F5F7FA" />
         </Style>
 
+        <Style x:Key="SegmentRadio" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="#AAB6C8" />
+            <Setter Property="Background" Value="#101827" />
+            <Setter Property="BorderBrush" Value="#46566F" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Margin" Value="0,0,7,0" />
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="SegmentBorder" CornerRadius="7"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="SegmentBorder" Property="BorderBrush" Value="#54D6A7" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="SegmentBorder" Property="Background" Value="#2563EB" />
+                                <Setter TargetName="SegmentBorder" Property="BorderBrush" Value="#60A5FA" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.38" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="TitleButton" TargetType="Button">
             <Setter Property="Width" Value="32" />
             <Setter Property="Height" Value="28" />
@@ -340,18 +376,28 @@
                     </GroupBox>
 
                     <GroupBox Header="实时曲线">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="180" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="曲线时间范围" Foreground="#E6EBF3" />
-                                <TextBlock Text="每秒采样一次" FontSize="10.5" Foreground="#78869A" Margin="0,3,0,0" />
-                            </StackPanel>
-                            <ComboBox x:Name="ChartRangeComboBox" Grid.Column="1" Height="34"
-                                      DisplayMemberPath="DisplayName" SelectedValuePath="Minutes" />
-                        </Grid>
+                        <StackPanel>
+                            <CheckBox x:Name="ShowNetworkChartCheckBox" Content="显示实时网速曲线（下载 / 上传）"
+                                      Checked="ChartEnabled_Changed" Unchecked="ChartEnabled_Changed" />
+                            <Grid x:Name="ChartRangePanel" Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="110" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="时间范围" Foreground="#E6EBF3" />
+                                    <TextBlock Text="每秒采样" FontSize="10.5" Foreground="#78869A" Margin="0,2,0,0" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <RadioButton x:Name="ChartRange1Radio" GroupName="ChartRange" Content="1 分钟"
+                                                 Style="{StaticResource SegmentRadio}" />
+                                    <RadioButton x:Name="ChartRange5Radio" GroupName="ChartRange" Content="5 分钟"
+                                                 Style="{StaticResource SegmentRadio}" />
+                                    <RadioButton x:Name="ChartRange10Radio" GroupName="ChartRange" Content="10 分钟"
+                                                 Style="{StaticResource SegmentRadio}" Margin="0" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
                     </GroupBox>
 
                     <GroupBox Header="温度读取">
