@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -535,7 +536,12 @@ public partial class MainWindow : Window
 
         _compactDragPending = false;
         CompactPanel.ReleaseMouseCapture();
-        if (TryDragMove()) TryDockToScreenEdge();
+        if (TryDragMove())
+        {
+            // DragMove returns before Windows has always committed the final move/size messages.
+            // Defer docking so the native drag loop cannot restore the old compact dimensions.
+            Dispatcher.BeginInvoke(TryDockToScreenEdge, DispatcherPriority.ContextIdle);
+        }
         e.Handled = true;
     }
 
@@ -566,30 +572,29 @@ public partial class MainWindow : Window
             || !_settings.CompactMode || !_settings.AutoHideAtScreenEdge
             || Stopwatch.GetTimestamp() < _suppressEdgeDockUntilTimestamp) return;
 
-        var area = GetCurrentWorkingArea();
-        var width = ActualWidth > 0 && double.IsFinite(ActualWidth) ? ActualWidth : CompactWidth;
-        var height = ActualHeight > 0 && double.IsFinite(ActualHeight) ? ActualHeight : CompactHeight;
-        var exceededEdge = DockEdge.Left;
-        var greatestOverflow = 0d;
+        if (!TryGetWindowPixelBounds(out var bounds, out var workingArea)) return;
 
-        SelectExceededEdge(DockEdge.Left, area.Left - Left);
-        SelectExceededEdge(DockEdge.Right, Left + width - area.Right);
-        SelectExceededEdge(DockEdge.Top, area.Top - Top);
-        SelectExceededEdge(DockEdge.Bottom, Top + height - area.Bottom);
+        var exceededEdge = DockEdge.Left;
+        var greatestOverflow = 0;
+
+        SelectExceededEdge(DockEdge.Left, workingArea.Left - bounds.Left);
+        SelectExceededEdge(DockEdge.Right, bounds.Right - workingArea.Right);
+        SelectExceededEdge(DockEdge.Top, workingArea.Top - bounds.Top);
+        SelectExceededEdge(DockEdge.Bottom, bounds.Bottom - workingArea.Bottom);
         if (greatestOverflow <= 0) return;
 
         _dockedEdge = exceededEdge;
         _dockAnchor = _dockedEdge is DockEdge.Left or DockEdge.Right
-            ? Top + height / 2
-            : Left + width / 2;
+            ? Top + ActualHeight / 2
+            : Left + ActualWidth / 2;
         _isEdgeDocked = true;
         CompactPanel.Visibility = Visibility.Collapsed;
         DockedStripPanel.Visibility = Visibility.Visible;
-        ApplyDockedDimensions(area);
+        ApplyDockedDimensions(GetCurrentWorkingArea());
 
-        void SelectExceededEdge(DockEdge edge, double overflow)
+        void SelectExceededEdge(DockEdge edge, int overflow)
         {
-            if (!double.IsFinite(overflow) || overflow <= greatestOverflow) return;
+            if (overflow <= greatestOverflow) return;
             exceededEdge = edge;
             greatestOverflow = overflow;
         }
@@ -621,6 +626,41 @@ public partial class MainWindow : Window
             DockedStripBorder.CornerRadius = _dockedEdge == DockEdge.Top
                 ? new CornerRadius(0, 0, 5, 5)
                 : new CornerRadius(5, 5, 0, 0);
+        }
+
+        UpdateLayout();
+        ApplyNativeWindowBounds();
+    }
+
+    private bool TryGetWindowPixelBounds(out NativeRect bounds, out System.Drawing.Rectangle workingArea)
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle != IntPtr.Zero && GetWindowRect(handle, out bounds))
+        {
+            workingArea = Forms.Screen.FromHandle(handle).WorkingArea;
+            return true;
+        }
+
+        bounds = default;
+        workingArea = default;
+        return false;
+    }
+
+    private void ApplyNativeWindowBounds()
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero) return;
+
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var x = (int)Math.Round(Left * dpi.DpiScaleX);
+        var y = (int)Math.Round(Top * dpi.DpiScaleY);
+        var width = Math.Max(1, (int)Math.Round(Width * dpi.DpiScaleX));
+        var height = Math.Max(1, (int)Math.Round(Height * dpi.DpiScaleY));
+        if (!SetWindowPos(handle, IntPtr.Zero, x, y, width, height,
+                SetWindowPositionFlags.NoActivate | SetWindowPositionFlags.NoZOrder))
+        {
+            AppDiagnostics.Log("设置贴边灰条窗口尺寸失败。",
+                new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error()));
         }
     }
 
@@ -808,6 +848,32 @@ public partial class MainWindow : Window
         return brush;
     }
 
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr windowHandle, out NativeRect rectangle);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(IntPtr windowHandle, IntPtr insertAfter,
+        int x, int y, int width, int height, SetWindowPositionFlags flags);
+
     private readonly record struct HistorySample(double? Download, double? Upload, long Timestamp);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly struct NativeRect
+    {
+        public readonly int Left;
+        public readonly int Top;
+        public readonly int Right;
+        public readonly int Bottom;
+    }
+
+    [Flags]
+    private enum SetWindowPositionFlags : uint
+    {
+        NoZOrder = 0x0004,
+        NoActivate = 0x0010
+    }
+
     private enum DockEdge { Left, Right, Top, Bottom }
 }
