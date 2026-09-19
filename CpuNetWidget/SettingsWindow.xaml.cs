@@ -26,6 +26,7 @@ public partial class SettingsWindow : Window
         AdministratorCheckBox.IsChecked = settings.RunAsAdministrator;
         TopmostCheckBox.IsChecked = settings.AlwaysOnTop;
         AutoStartCheckBox.IsChecked = autoStartEnabled;
+        CompactModeCheckBox.IsChecked = settings.CompactMode;
         ShowNetworkChartCheckBox.IsChecked = settings.ShowNetworkChart;
         ChartRange1Radio.IsChecked = settings.ChartRangeMinutes == 1;
         ChartRange5Radio.IsChecked = settings.ChartRangeMinutes == 5;
@@ -98,6 +99,7 @@ public partial class SettingsWindow : Window
             RunAsAdministrator = AdministratorCheckBox.IsChecked == true,
             AlwaysOnTop = TopmostCheckBox.IsChecked == true,
             ShowNetworkChart = ShowNetworkChartCheckBox.IsChecked == true,
+            CompactMode = CompactModeCheckBox.IsChecked == true,
             ChartRangeMinutes = ChartRange10Radio.IsChecked == true ? 10
                 : ChartRange5Radio.IsChecked == true ? 5 : 1
         };

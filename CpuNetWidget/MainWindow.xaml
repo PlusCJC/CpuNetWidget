@@ -56,7 +56,8 @@
         </Style>
     </Window.Resources>
 
-    <Border CornerRadius="16" BorderBrush="#3B465A" BorderThickness="1"
+    <Grid>
+    <Border x:Name="FullPanel" CornerRadius="16" BorderBrush="#3B465A" BorderThickness="1"
             Background="#111827" Padding="17,13,17,15">
         <Border.Effect>
             <DropShadowEffect Color="#000000" BlurRadius="20" ShadowDepth="4" Opacity="0.45" />
@@ -77,16 +78,19 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
                     <Ellipse Width="9" Height="9" Fill="#54D6A7" Margin="0,5,9,0" />
                     <TextBlock Text="系统状态" FontSize="14" FontWeight="SemiBold" />
                 </StackPanel>
-                <Button Grid.Column="1" Content="—" FontSize="13" Style="{StaticResource TitleButton}"
+                <Button Grid.Column="1" Content="◉" FontSize="13" Style="{StaticResource TitleButton}"
+                        ToolTip="切换迷你加速球" Click="CompactModeButton_Click" />
+                <Button Grid.Column="2" Content="—" FontSize="13" Style="{StaticResource TitleButton}"
                         ToolTip="最小化到系统托盘" Click="MinimizeToTray_Click" />
-                <Button Grid.Column="2" Content="⚙" FontSize="15" Style="{StaticResource TitleButton}"
+                <Button Grid.Column="3" Content="⚙" FontSize="15" Style="{StaticResource TitleButton}"
                         ToolTip="打开设置" Click="SettingsButton_Click" />
-                <Button Grid.Column="3" Content="×" FontSize="17" Foreground="#FF8A8A"
+                <Button Grid.Column="4" Content="×" FontSize="17" Foreground="#FF8A8A"
                         Style="{StaticResource TitleButton}" ToolTip="退出程序" Click="ExitButton_Click" />
             </Grid>
 
@@ -171,4 +175,60 @@
             </Grid>
         </Grid>
     </Border>
+
+    <Grid x:Name="CompactPanel" Width="122" Height="122" Visibility="Collapsed"
+          MouseLeftButtonDown="CompactPanel_MouseLeftButtonDown"
+          MouseLeftButtonUp="CompactPanel_MouseLeftButtonUp"
+          MouseMove="CompactPanel_MouseMove"
+          MouseRightButtonUp="CompactPanel_MouseRightButtonUp">
+        <Ellipse Fill="#111827" Stroke="#3B465A" StrokeThickness="1">
+            <Ellipse.Effect>
+                <DropShadowEffect Color="#000000" BlurRadius="20" ShadowDepth="4" Opacity="0.5" />
+            </Ellipse.Effect>
+        </Ellipse>
+        <Ellipse Width="106" Height="106" Stroke="#29374A" StrokeThickness="5" />
+        <Path x:Name="CompactCpuArc" Width="122" Height="122" Stroke="#54D6A7"
+              StrokeThickness="5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+              IsHitTestVisible="False" />
+
+        <Grid Margin="18,13,18,12" IsHitTestVisible="False">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="18" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="25" />
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" HorizontalAlignment="Right" CornerRadius="5"
+                    Background="#D9111827" Padding="3,0" Margin="0,1,1,0">
+                <TextBlock x:Name="CompactTemperatureText" Text="--°" FontSize="9.5"
+                           Foreground="#FF9A9A" VerticalAlignment="Center" />
+            </Border>
+            <Ellipse Grid.Row="0" Width="7" Height="7" Fill="#54D6A7"
+                     HorizontalAlignment="Left" VerticalAlignment="Top" Margin="2,3,0,0" />
+
+            <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock Text="CPU" FontSize="9" Foreground="#8795AA" HorizontalAlignment="Center" />
+                <TextBlock x:Name="CompactCpuText" Text="--%" FontSize="22" FontWeight="SemiBold"
+                           Foreground="White" HorizontalAlignment="Center" Margin="0,-2,0,0" />
+            </StackPanel>
+
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                    <TextBlock Text="↓ 下载" FontSize="8" Foreground="#74B9FF" HorizontalAlignment="Center" />
+                    <TextBlock x:Name="CompactDownloadText" Text="0 B" FontSize="9.5"
+                               Foreground="#CFE8FF" HorizontalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                    <TextBlock Text="↑ 上传" FontSize="8" Foreground="#FFB86C" HorizontalAlignment="Center" />
+                    <TextBlock x:Name="CompactUploadText" Text="0 B" FontSize="9.5"
+                               Foreground="#FFE0BD" HorizontalAlignment="Center" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Grid>
+    </Grid>
 </Window>

@@ -424,6 +424,7 @@
 
                     <GroupBox Header="窗口与启动">
                         <StackPanel>
+                            <CheckBox x:Name="CompactModeCheckBox" Content="使用迷你加速球模式" />
                             <CheckBox x:Name="TopmostCheckBox" Content="悬浮窗始终置顶" />
                             <CheckBox x:Name="AutoStartCheckBox" Content="登录 Windows 后自动启动" />
                         </StackPanel>

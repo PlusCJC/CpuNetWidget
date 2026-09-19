@@ -29,6 +29,9 @@ public partial class MainWindow : Window
     private bool _reallyClose;
     private int _updateInProgress;
     private double _expandedWindowHeight = 330;
+    private double _expandedWindowWidth = 390;
+    private bool _compactDragPending;
+    private System.Windows.Point _compactDragStart;
     private int HistoryCapacity => _settings.ChartRangeMinutes * 60;
 
     public MainWindow()
@@ -50,6 +53,8 @@ public partial class MainWindow : Window
         _contextMenu = new Forms.ContextMenuStrip();
         _contextMenu.Items.Add("显示悬浮窗", null, (_, _) => ShowWidget());
         _contextMenu.Items.Add("隐藏悬浮窗", null, (_, _) => Dispatcher.Invoke(Hide));
+        _contextMenu.Items.Add("切换窗口模式", null, (_, _) =>
+            Dispatcher.Invoke(() => SetCompactMode(!_settings.CompactMode)));
         _contextMenu.Items.Add(new Forms.ToolStripSeparator());
         _contextMenu.Items.Add("设置…", null, async (_, _) => await OpenSettingsAsync());
         _contextMenu.Items.Add(new Forms.ToolStripSeparator());
@@ -71,6 +76,7 @@ public partial class MainWindow : Window
         {
             KeepInsideWorkingArea();
             ApplyMonitoringVisuals();
+            ApplyWindowMode();
             _timer.Start();
             await RefreshMetricsAsync();
         };
@@ -143,6 +149,53 @@ public partial class MainWindow : Window
             DownloadText.Text = FormatSpeed(network.Value.DownloadBytesPerSecond);
         if (_settings.MonitorUpload && network.HasValue)
             UploadText.Text = FormatSpeed(network.Value.UploadBytesPerSecond);
+
+        UpdateCompactDisplay(cpuUsage, temperature, network);
+    }
+
+    private void UpdateCompactDisplay(double? cpuUsage, TemperatureReading temperature, NetworkSpeed? network)
+    {
+        CompactCpuText.Text = _settings.MonitorCpu && cpuUsage.HasValue ? $"{cpuUsage:0}%" : "--%";
+        CompactTemperatureText.Text = _settings.MonitorTemperature && temperature.Celsius.HasValue
+            ? $"{temperature.Celsius:0}°" : "--°";
+        CompactDownloadText.Text = _settings.MonitorDownload && network.HasValue
+            ? FormatCompactSpeed(network.Value.DownloadBytesPerSecond) : "--";
+        CompactUploadText.Text = _settings.MonitorUpload && network.HasValue
+            ? FormatCompactSpeed(network.Value.UploadBytesPerSecond) : "--";
+
+        UpdateCompactCpuArc(_settings.MonitorCpu ? cpuUsage : null);
+        CompactPanel.ToolTip = $"双击展开完整面板\nCPU {CompactCpuText.Text}  温度 {CompactTemperatureText.Text}\n" +
+                               $"下载 {CompactDownloadText.Text}/s  上传 {CompactUploadText.Text}/s";
+    }
+
+    private void UpdateCompactCpuArc(double? usage)
+    {
+        if (!usage.HasValue || usage.Value <= 0)
+        {
+            CompactCpuArc.Data = null;
+            return;
+        }
+
+        var value = Math.Clamp(usage.Value, 0, 100);
+        var angle = Math.Min(359.99, value * 3.6);
+        const double center = 61;
+        const double radius = 52;
+        var start = new System.Windows.Point(center, center - radius);
+        var radians = (angle - 90) * Math.PI / 180;
+        var end = new System.Windows.Point(
+            center + radius * Math.Cos(radians),
+            center + radius * Math.Sin(radians));
+
+        var figure = new PathFigure { StartPoint = start, IsClosed = false };
+        figure.Segments.Add(new ArcSegment(end, new System.Windows.Size(radius, radius), 0,
+            angle >= 180, SweepDirection.Clockwise, true));
+        CompactCpuArc.Data = new PathGeometry([figure]);
+        CompactCpuArc.Stroke = value switch
+        {
+            >= 90 => new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 92, 92)),
+            >= 75 => new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 184, 108)),
+            _ => new SolidColorBrush(System.Windows.Media.Color.FromRgb(84, 214, 167))
+        };
     }
 
     private void ApplyMonitoringVisuals()
@@ -166,7 +219,7 @@ public partial class MainWindow : Window
         ChartSeparator.Visibility = _settings.ShowNetworkChart ? Visibility.Visible : Visibility.Collapsed;
         ChartRow.Height = _settings.ShowNetworkChart ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
 
-        if (!IsLoaded) return;
+        if (!IsLoaded || _settings.CompactMode) return;
         if (_settings.ShowNetworkChart)
         {
             MinHeight = 300;
@@ -178,6 +231,38 @@ public partial class MainWindow : Window
             MinHeight = 190;
             Height = 190;
         }
+    }
+
+    private void ApplyWindowMode()
+    {
+        FullPanel.Visibility = _settings.CompactMode ? Visibility.Collapsed : Visibility.Visible;
+        CompactPanel.Visibility = _settings.CompactMode ? Visibility.Visible : Visibility.Collapsed;
+        if (!IsLoaded) return;
+
+        if (_settings.CompactMode)
+        {
+            if (Width >= 350) _expandedWindowWidth = Width;
+            ResizeMode = ResizeMode.NoResize;
+            MinWidth = 122;
+            MinHeight = 122;
+            Width = 122;
+            Height = 122;
+        }
+        else
+        {
+            ResizeMode = ResizeMode.CanResizeWithGrip;
+            MinWidth = 350;
+            Width = Math.Max(390, _expandedWindowWidth);
+            ApplyChartVisibility();
+        }
+        KeepInsideWorkingArea();
+    }
+
+    private void SetCompactMode(bool compact)
+    {
+        _settings.CompactMode = compact;
+        _settings.Save();
+        ApplyWindowMode();
     }
 
     private static void SetPanelState(StackPanel panel, TextBlock valueText, bool enabled,
@@ -270,6 +355,7 @@ public partial class MainWindow : Window
         _networkSpeedReader.Reset();
         _history.Clear();
         ApplyMonitoringVisuals();
+        ApplyWindowMode();
         RenderChart();
 
         if (!oldSettings.RunAsAdministrator && _settings.RunAsAdministrator
@@ -301,11 +387,20 @@ public partial class MainWindow : Window
         return $"{bytesPerSecond / 1024 / 1024 / 1024:0.00} GB/s";
     }
 
+    private static string FormatCompactSpeed(double bytesPerSecond)
+    {
+        if (bytesPerSecond < 1024) return $"{bytesPerSecond:0} B";
+        if (bytesPerSecond < 1024 * 1024) return $"{bytesPerSecond / 1024:0} K";
+        if (bytesPerSecond < 1024 * 1024 * 1024) return $"{bytesPerSecond / 1024 / 1024:0.0} M";
+        return $"{bytesPerSecond / 1024 / 1024 / 1024:0.0} G";
+    }
+
     private static string TruncateTrayText(string text) => text.Length <= 63 ? text : text[..63];
 
     private void Window_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ButtonState != MouseButtonState.Pressed) return;
+        if (_settings.CompactMode) return;
 
         for (var element = e.OriginalSource as DependencyObject; element is not null;
              element = VisualTreeHelper.GetParent(element))
@@ -318,6 +413,52 @@ public partial class MainWindow : Window
     }
 
     private async void SettingsButton_Click(object sender, RoutedEventArgs e) => await OpenSettingsAsync();
+
+    private void CompactModeButton_Click(object sender, RoutedEventArgs e) => SetCompactMode(true);
+
+    private void CompactPanel_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        _contextMenu.Show(Forms.Cursor.Position);
+        e.Handled = true;
+    }
+
+    private void CompactPanel_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount >= 2)
+        {
+            _compactDragPending = false;
+            CompactPanel.ReleaseMouseCapture();
+            SetCompactMode(false);
+            e.Handled = true;
+            return;
+        }
+
+        _compactDragPending = true;
+        _compactDragStart = e.GetPosition(this);
+        CompactPanel.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void CompactPanel_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (!_compactDragPending || e.LeftButton != MouseButtonState.Pressed) return;
+        var current = e.GetPosition(this);
+        if (Math.Abs(current.X - _compactDragStart.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(current.Y - _compactDragStart.Y) < SystemParameters.MinimumVerticalDragDistance)
+            return;
+
+        _compactDragPending = false;
+        CompactPanel.ReleaseMouseCapture();
+        DragMove();
+        e.Handled = true;
+    }
+
+    private void CompactPanel_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        _compactDragPending = false;
+        CompactPanel.ReleaseMouseCapture();
+        e.Handled = true;
+    }
 
     private void ChartCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => RenderChart();
 
