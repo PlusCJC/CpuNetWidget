@@ -194,7 +194,7 @@ setup\CpuNetWidget-Setup.exe
 .\BuildSetup.ps1 -IsccPath "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 ```
 
-安装器默认安装到当前用户的 `%LOCALAPPDATA%\Programs\CpuNetWidget`，不要求管理员权限。安装过程中可以选择桌面快捷方式和开机启动。
+安装器默认建议安装到当前用户的 `%LOCALAPPDATA%\Programs\CpuNetWidget`，并且始终显示安装目录页面；用户可以直接输入或通过“浏览”按钮选择其他目录，升级时会自动带入上次使用的路径。安装到当前用户可写目录时不要求管理员权限。安装过程中还可以选择桌面快捷方式和开机启动。
 
 可从 Windows“设置 > 应用 > 已安装的应用”或开始菜单中的“卸载 CPU 网速悬浮窗”执行卸载。卸载程序会先结束正在运行的悬浮窗，然后删除：
 
