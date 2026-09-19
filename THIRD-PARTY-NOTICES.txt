@@ -1,9 +1,61 @@
-CPU 网速悬浮窗使用以下第三方组件：
+CPU 网速悬浮窗第三方组件说明
+==============================
+
+本文件根据当前 NuGet 还原结果汇总直接依赖及主要传递依赖。它不是各许可证
+全文的替代品；完整许可条款请通过下列项目地址、NuGet 包元数据或许可证地址查看。
+
+直接依赖
+--------
 
 LibreHardwareMonitorLib 0.9.6
 Copyright (C) LibreHardwareMonitor contributors
 License: Mozilla Public License 2.0
 Project: https://github.com/LibreHardwareMonitor/LibreHardwareMonitor
-License text: https://www.mozilla.org/MPL/2.0/
+License: https://www.mozilla.org/MPL/2.0/
 
 该组件用于读取 CPU 硬件温度传感器。
+
+主要传递依赖
+------------
+
+BlackSharp.Core 1.0.7
+License: Mozilla Public License 2.0
+Project: https://github.com/Blacktempel/BlackSharp
+
+DiskInfoToolkit 1.1.2
+License: Mozilla Public License 2.0
+Project: https://github.com/Blacktempel/DiskInfoToolkit
+
+RAMSPDToolkit-NDD 1.4.2
+License: Mozilla Public License 2.0
+Project: https://github.com/Blacktempel/RAMSPDToolkit
+
+HidSharp 2.6.4
+Copyright 2010-2025 James F. Bellinger
+License: Apache License 2.0
+Project: https://software.seekye.com/hidsharp
+License: https://www.apache.org/licenses/LICENSE-2.0
+
+Mono.Posix.NETStandard 1.0.0
+Copyright Microsoft Corporation
+License information: https://go.microsoft.com/fwlink/?linkid=869050
+
+以下 Microsoft .NET 包按其 NuGet 元数据使用 MIT License：
+
+- System.CodeDom 10.0.2
+- System.IO.Ports 10.0.3 及其运行时原生包
+- System.Management 10.0.2
+- System.Threading.AccessControl 10.0.3
+
+License: https://licenses.nuget.org/MIT
+
+自包含发布
+----------
+
+默认构建会携带 Microsoft .NET 8 Windows Desktop Runtime。其源代码和许可证信息：
+https://github.com/dotnet/runtime
+
+重新生成依赖清单
+----------------
+
+dotnet list .\CpuNetWidget\CpuNetWidget.csproj package --include-transitive

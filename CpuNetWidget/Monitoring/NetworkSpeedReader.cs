@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.NetworkInformation;
 
 namespace CpuNetWidget.Monitoring;
@@ -5,25 +6,44 @@ namespace CpuNetWidget.Monitoring;
 internal sealed class NetworkSpeedReader
 {
     private readonly Dictionary<string, Sample> _previousSamples = new(StringComparer.Ordinal);
-    private DateTime _lastReadUtc = DateTime.UtcNow;
+    private readonly HashSet<string> _loggedAdapterFailures = new(StringComparer.Ordinal);
+    private long _lastReadTimestamp = Stopwatch.GetTimestamp();
+    private long _lastEnumerationFailureLogTimestamp;
 
-    public NetworkSpeed ReadSpeed()
+    public NetworkSpeed? ReadSpeed()
     {
-        var now = DateTime.UtcNow;
-        var elapsedSeconds = Math.Max((now - _lastReadUtc).TotalSeconds, 0.001);
-        _lastReadUtc = now;
+        var now = Stopwatch.GetTimestamp();
+        var elapsedSeconds = Math.Max(Stopwatch.GetElapsedTime(_lastReadTimestamp, now).TotalSeconds, 0.001);
 
-        long receivedDelta = 0;
-        long sentDelta = 0;
+        double receivedDelta = 0;
+        double sentDelta = 0;
         var currentIds = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var adapter in GetActiveInternetAdapters())
+        NetworkInterface[] adapters;
+        try
         {
+            adapters = GetActiveInternetAdapters();
+        }
+        catch (Exception exception) when (exception is NetworkInformationException
+                                          or PlatformNotSupportedException
+                                          or InvalidOperationException)
+        {
+            if (_lastEnumerationFailureLogTimestamp == 0
+                || Stopwatch.GetElapsedTime(_lastEnumerationFailureLogTimestamp, now) >= TimeSpan.FromMinutes(1))
+            {
+                AppDiagnostics.Log("枚举网络适配器失败。", exception);
+                _lastEnumerationFailureLogTimestamp = now;
+            }
+            return null;
+        }
+
+        foreach (var adapter in adapters)
+        {
+            currentIds.Add(adapter.Id);
             try
             {
                 var statistics = adapter.GetIPStatistics();
                 var current = new Sample(statistics.BytesReceived, statistics.BytesSent);
-                currentIds.Add(adapter.Id);
 
                 if (_previousSamples.TryGetValue(adapter.Id, out var previous))
                 {
@@ -32,28 +52,38 @@ internal sealed class NetworkSpeedReader
                 }
 
                 _previousSamples[adapter.Id] = current;
+                _loggedAdapterFailures.Remove(adapter.Id);
             }
-            catch (NetworkInformationException)
+            catch (Exception exception) when (exception is NetworkInformationException
+                                               or InvalidOperationException
+                                               or PlatformNotSupportedException)
             {
                 // A network adapter can disappear while it is being queried.
+                _previousSamples.Remove(adapter.Id);
+                if (_loggedAdapterFailures.Add(adapter.Id))
+                    AppDiagnostics.Log($"读取网络适配器失败：{adapter.Name}", exception);
             }
         }
 
         foreach (var staleId in _previousSamples.Keys.Where(id => !currentIds.Contains(id)).ToArray())
         {
             _previousSamples.Remove(staleId);
+            _loggedAdapterFailures.Remove(staleId);
         }
 
+        _lastReadTimestamp = now;
         return new NetworkSpeed(receivedDelta / elapsedSeconds, sentDelta / elapsedSeconds);
     }
 
     public void Reset()
     {
         _previousSamples.Clear();
-        _lastReadUtc = DateTime.UtcNow;
+        _loggedAdapterFailures.Clear();
+        _lastReadTimestamp = Stopwatch.GetTimestamp();
+        _lastEnumerationFailureLogTimestamp = 0;
     }
 
-    private static IEnumerable<NetworkInterface> GetActiveInternetAdapters()
+    private static NetworkInterface[] GetActiveInternetAdapters()
     {
         var active = NetworkInterface.GetAllNetworkInterfaces()
             .Where(adapter => adapter.OperationalStatus == OperationalStatus.Up)

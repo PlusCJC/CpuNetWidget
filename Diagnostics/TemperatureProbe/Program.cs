@@ -2,14 +2,21 @@ using LibreHardwareMonitor.Hardware;
 using System.Diagnostics;
 
 var computer = new Computer { IsCpuEnabled = true, IsMotherboardEnabled = true };
-computer.Open();
-computer.Accept(new UpdateVisitor());
-
-foreach (var hardware in computer.Hardware)
+try
 {
-    PrintHardware(hardware, string.Empty);
+    computer.Open();
+    computer.Accept(new UpdateVisitor());
+
+    foreach (var hardware in computer.Hardware)
+    {
+        PrintHardware(hardware, string.Empty);
+    }
 }
-computer.Close();
+finally
+{
+    try { computer.Close(); }
+    catch (Exception exception) { Console.Error.WriteLine($"关闭硬件监控器失败：{exception.Message}"); }
+}
 
 Console.WriteLine("[Windows ACPI fallback]");
 try

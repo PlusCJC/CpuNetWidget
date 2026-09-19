@@ -5,9 +5,8 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Shapes;
-using System.Windows.Threading;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using CpuNetWidget.Monitoring;
 using Microsoft.Win32;
 using Forms = System.Windows.Forms;
@@ -24,6 +23,9 @@ public partial class MainWindow : Window
     private const double DockLength = 50;
     private const double DockThreshold = 24;
     private const double RestoreInset = DockThreshold + 8;
+    private static readonly System.Windows.Media.Brush CpuNormalBrush = CreateFrozenBrush(84, 214, 167);
+    private static readonly System.Windows.Media.Brush WarningBrush = CreateFrozenBrush(255, 184, 108);
+    private static readonly System.Windows.Media.Brush CriticalBrush = CreateFrozenBrush(255, 92, 92);
 
     private readonly CpuUsageReader _cpuUsageReader = new();
     private readonly NetworkSpeedReader _networkSpeedReader = new();
@@ -43,8 +45,11 @@ public partial class MainWindow : Window
     private bool _isEdgeDocked;
     private DockEdge _dockedEdge;
     private double _dockAnchor;
-    private DateTime _suppressEdgeDockUntil;
-    private int HistoryCapacity => _settings.ChartRangeMinutes * 60;
+    private long _suppressEdgeDockUntilTimestamp;
+    private bool _settingsWindowOpen;
+    private bool _isExiting;
+    private bool _refreshFailureLogged;
+    private TimeSpan ChartRange => TimeSpan.FromMinutes(_settings.ChartRangeMinutes);
 
     public MainWindow()
     {
@@ -58,6 +63,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
+            AppDiagnostics.Log("初始化温度监控模块失败。", exception);
             TemperatureHint.Text = "温度模块不可用";
             TemperatureHint.ToolTip = exception.Message;
         }
@@ -95,7 +101,8 @@ public partial class MainWindow : Window
         };
         LocationChanged += (_, _) =>
         {
-            if (!IsLoaded || !_settings.CompactMode || _isEdgeDocked) return;
+            if (!IsLoaded || !IsVisible || WindowState != WindowState.Normal
+                || !_settings.CompactMode || _isEdgeDocked) return;
             _edgeDockTimer.Stop();
             _edgeDockTimer.Start();
         };
@@ -112,7 +119,7 @@ public partial class MainWindow : Window
 
     private async Task RefreshMetricsAsync()
     {
-        if (Interlocked.Exchange(ref _updateInProgress, 1) == 1) return;
+        if (_isExiting || Interlocked.Exchange(ref _updateInProgress, 1) == 1) return;
 
         try
         {
@@ -124,16 +131,32 @@ public partial class MainWindow : Window
             var temperature = _settings.MonitorTemperature && _temperatureReader is not null
                 ? await Task.Run(() => _temperatureReader.ReadTemperature(selectedSensor))
                 : new TemperatureReading(null,
-                    _settings.MonitorTemperature ? "温度模块不可用" : "监控已关闭", null);
+                    _settings.MonitorTemperature ? "温度模块不可用" : "监控已关闭");
 
+            if (_isExiting) return;
             UpdateMetricValues(cpuUsage, temperature, network);
             if (_settings.ShowNetworkChart)
             {
                 AddHistory(new HistorySample(
                     _settings.MonitorDownload ? network?.DownloadBytesPerSecond : null,
-                    _settings.MonitorUpload ? network?.UploadBytesPerSecond : null));
+                    _settings.MonitorUpload ? network?.UploadBytesPerSecond : null,
+                    Stopwatch.GetTimestamp()));
             }
             UpdateTrayText(cpuUsage, temperature, network);
+            _refreshFailureLogged = false;
+        }
+        catch (Exception exception)
+        {
+            if (!_refreshFailureLogged)
+            {
+                AppDiagnostics.Log("刷新监控数据失败。", exception);
+                _refreshFailureLogged = true;
+            }
+            if (!_isExiting)
+            {
+                TemperatureHint.Text = "本次刷新失败，将自动重试";
+                TemperatureHint.ToolTip = exception.Message;
+            }
         }
         finally
         {
@@ -143,10 +166,10 @@ public partial class MainWindow : Window
 
     private void UpdateMetricValues(double? cpuUsage, TemperatureReading temperature, NetworkSpeed? network)
     {
-        if (_settings.MonitorCpu && cpuUsage.HasValue)
+        if (_settings.MonitorCpu)
         {
-            CpuText.Text = $"{cpuUsage:0}%";
-            CpuProgress.Value = cpuUsage.Value;
+            CpuText.Text = cpuUsage.HasValue ? $"{cpuUsage:0}%" : "--%";
+            CpuProgress.Value = cpuUsage ?? 0;
         }
 
         if (_settings.MonitorTemperature)
@@ -157,8 +180,8 @@ public partial class MainWindow : Window
                 TemperatureText.Text = $"{value:0}°C";
                 TemperatureText.Foreground = value switch
                 {
-                    >= 90 => new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 92, 92)),
-                    >= 75 => new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 184, 108)),
+                    >= 90 => CriticalBrush,
+                    >= 75 => WarningBrush,
                     _ => System.Windows.Media.Brushes.White
                 };
                 TemperatureHint.Text = temperature.SensorName;
@@ -173,10 +196,10 @@ public partial class MainWindow : Window
             }
         }
 
-        if (_settings.MonitorDownload && network.HasValue)
-            DownloadText.Text = FormatSpeed(network.Value.DownloadBytesPerSecond);
-        if (_settings.MonitorUpload && network.HasValue)
-            UploadText.Text = FormatSpeed(network.Value.UploadBytesPerSecond);
+        if (_settings.MonitorDownload)
+            DownloadText.Text = network.HasValue ? FormatSpeed(network.Value.DownloadBytesPerSecond) : "-- B/s";
+        if (_settings.MonitorUpload)
+            UploadText.Text = network.HasValue ? FormatSpeed(network.Value.UploadBytesPerSecond) : "-- B/s";
 
         UpdateCompactDisplay(cpuUsage, temperature, network);
     }
@@ -220,9 +243,9 @@ public partial class MainWindow : Window
         CompactCpuArc.Data = new PathGeometry([figure]);
         CompactCpuArc.Stroke = value switch
         {
-            >= 90 => new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 92, 92)),
-            >= 75 => new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 184, 108)),
-            _ => new SolidColorBrush(System.Windows.Media.Color.FromRgb(84, 214, 167))
+            >= 90 => CriticalBrush,
+            >= 75 => WarningBrush,
+            _ => CpuNormalBrush
         };
     }
 
@@ -280,6 +303,7 @@ public partial class MainWindow : Window
         if (_settings.CompactMode)
         {
             if (Width >= 350) _expandedWindowWidth = Width;
+            if (Height >= 300) _expandedWindowHeight = Height;
             ResizeMode = ResizeMode.NoResize;
             MinWidth = CompactWidth;
             MinHeight = CompactHeight;
@@ -319,7 +343,8 @@ public partial class MainWindow : Window
     private void AddHistory(HistorySample sample)
     {
         _history.Add(sample);
-        if (_history.Count > HistoryCapacity) _history.RemoveAt(0);
+        var now = Stopwatch.GetTimestamp();
+        _history.RemoveAll(item => Stopwatch.GetElapsedTime(item.Timestamp, now) > ChartRange);
         RenderChart();
     }
 
@@ -337,35 +362,36 @@ public partial class MainWindow : Window
         var height = ChartCanvas.ActualHeight;
         if (width <= 1 || height <= 1 || _history.Count == 0) return;
 
-        var networkMaximum = _history
-            .SelectMany(sample => new[] { sample.Download, sample.Upload })
-            .Where(value => value.HasValue)
-            .Select(value => value!.Value)
-            .DefaultIfEmpty(1024)
-            .Max();
-        networkMaximum = Math.Max(1024, networkMaximum);
+        var networkMaximum = 1024d;
+        foreach (var sample in _history)
+        {
+            if (sample.Download is { } download && double.IsFinite(download))
+                networkMaximum = Math.Max(networkMaximum, download);
+            if (sample.Upload is { } upload && double.IsFinite(upload))
+                networkMaximum = Math.Max(networkMaximum, upload);
+        }
 
+        var now = Stopwatch.GetTimestamp();
         DownloadLine.Points = BuildPoints(sample => sample.Download,
-            value => value / networkMaximum, width, height);
+            value => value / networkMaximum, width, height, now);
         UploadLine.Points = BuildPoints(sample => sample.Upload,
-            value => value / networkMaximum, width, height);
+            value => value / networkMaximum, width, height, now);
         NetworkScaleText.Text = _settings.MonitorDownload || _settings.MonitorUpload
             ? $"网络峰值 {FormatSpeed(networkMaximum)}"
             : "网络监控已关闭";
     }
 
     private PointCollection BuildPoints(Func<HistorySample, double?> selector,
-        Func<double, double> normalize, double width, double height)
+        Func<double, double> normalize, double width, double height, long now)
     {
         var points = new PointCollection();
-        var leadingEmptySlots = HistoryCapacity - _history.Count;
-        for (var index = 0; index < _history.Count; index++)
+        var rangeSeconds = ChartRange.TotalSeconds;
+        foreach (var sample in _history)
         {
-            var value = selector(_history[index]);
+            var value = selector(sample);
             if (!value.HasValue) continue;
-            var x = HistoryCapacity == 1
-                ? width
-                : (leadingEmptySlots + index) * width / (HistoryCapacity - 1);
+            var ageSeconds = Stopwatch.GetElapsedTime(sample.Timestamp, now).TotalSeconds;
+            var x = width * Math.Clamp(1 - ageSeconds / rangeSeconds, 0, 1);
             var normalized = Math.Clamp(normalize(value.Value), 0, 1);
             points.Add(new System.Windows.Point(x, height * (1 - normalized)));
         }
@@ -374,52 +400,71 @@ public partial class MainWindow : Window
 
     private async Task OpenSettingsAsync()
     {
-        IReadOnlyList<TemperatureSensorOption> sensors = [];
-        if (_temperatureReader is not null)
+        if (_settingsWindowOpen || _isExiting) return;
+        _settingsWindowOpen = true;
+        try
         {
-            try { sensors = await Task.Run(_temperatureReader.GetAvailableSensors); }
-            catch { /* The settings window can still open without a sensor list. */ }
+            IReadOnlyList<TemperatureSensorOption> sensors = [];
+            if (_temperatureReader is not null)
+            {
+                try { sensors = await Task.Run(_temperatureReader.GetAvailableSensors); }
+                catch (Exception exception)
+                {
+                    AppDiagnostics.Log("枚举温度传感器失败。", exception);
+                }
+            }
+
+            if (_isExiting) return;
+            var oldSettings = _settings;
+            var dialog = new SettingsWindow(_settings, sensors, IsAutoStartEnabled()) { Owner = this };
+            if (dialog.ShowDialog() != true) return;
+
+            TrySetAutoStart(dialog.AutoStartEnabled);
+
+            _settings = dialog.ResultSettings;
+            if (!_settings.Save())
+            {
+                System.Windows.MessageBox.Show(
+                    $"设置已经在本次运行中生效，但无法保存到注册表。\n\n诊断日志：\n{AppDiagnostics.LogPath}",
+                    "设置未持久化", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            Topmost = _settings.AlwaysOnTop;
+            _cpuUsageReader.Reset();
+            _networkSpeedReader.Reset();
+            _history.Clear();
+            ApplyMonitoringVisuals();
+            ApplyWindowMode();
+            RenderChart();
+
+            if (!oldSettings.RunAsAdministrator && _settings.RunAsAdministrator
+                && !PrivilegeHelper.IsAdministrator())
+            {
+                var restart = System.Windows.MessageBox.Show(
+                    "管理员权限设置已保存。是否立即重启并显示 Windows UAC 确认？",
+                    "需要重启", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (restart == MessageBoxResult.Yes && PrivilegeHelper.TryRestartAsAdministrator())
+                    ExitApplication();
+            }
         }
-
-        var oldSettings = _settings;
-        var dialog = new SettingsWindow(_settings, sensors, IsAutoStartEnabled()) { Owner = this };
-        if (dialog.ShowDialog() != true) return;
-
-        if (!TrySetAutoStart(dialog.AutoStartEnabled)) return;
-
-        _settings = dialog.ResultSettings;
-        _settings.Save();
-        Topmost = _settings.AlwaysOnTop;
-        _cpuUsageReader.Reset();
-        _networkSpeedReader.Reset();
-        _history.Clear();
-        ApplyMonitoringVisuals();
-        ApplyWindowMode();
-        RenderChart();
-
-        if (!oldSettings.RunAsAdministrator && _settings.RunAsAdministrator
-            && !PrivilegeHelper.IsAdministrator())
+        finally
         {
-            var restart = System.Windows.MessageBox.Show(
-                "管理员权限设置已保存。是否立即重启并显示 Windows UAC 确认？",
-                "需要重启", MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (restart == MessageBoxResult.Yes && PrivilegeHelper.TryRestartAsAdministrator())
-                ExitApplication();
+            _settingsWindowOpen = false;
         }
     }
 
     private void UpdateTrayText(double? cpuUsage, TemperatureReading temperature, NetworkSpeed? network)
     {
         var parts = new List<string>();
-        if (_settings.MonitorCpu && cpuUsage.HasValue) parts.Add($"CPU {cpuUsage:0}%");
+        if (_settings.MonitorCpu) parts.Add(cpuUsage.HasValue ? $"CPU {cpuUsage:0}%" : "CPU --");
         if (_settings.MonitorTemperature) parts.Add(temperature.Celsius.HasValue ? $"{temperature.Celsius:0}°C" : "温度 --");
-        if (_settings.MonitorDownload && network.HasValue) parts.Add($"↓ {FormatSpeed(network.Value.DownloadBytesPerSecond)}");
-        if (_settings.MonitorUpload && network.HasValue) parts.Add($"↑ {FormatSpeed(network.Value.UploadBytesPerSecond)}");
+        if (_settings.MonitorDownload) parts.Add(network.HasValue ? $"↓ {FormatSpeed(network.Value.DownloadBytesPerSecond)}" : "↓ --");
+        if (_settings.MonitorUpload) parts.Add(network.HasValue ? $"↑ {FormatSpeed(network.Value.UploadBytesPerSecond)}" : "↑ --");
         _notifyIcon.Text = TruncateTrayText(parts.Count > 0 ? string.Join("  ", parts) : "CPU 网速悬浮窗 · 监控已关闭");
     }
 
     private static string FormatSpeed(double bytesPerSecond)
     {
+        bytesPerSecond = NormalizeRate(bytesPerSecond);
         if (bytesPerSecond < 1024) return $"{bytesPerSecond:0} B/s";
         if (bytesPerSecond < 1024 * 1024) return $"{bytesPerSecond / 1024:0.0} KB/s";
         if (bytesPerSecond < 1024 * 1024 * 1024) return $"{bytesPerSecond / 1024 / 1024:0.0} MB/s";
@@ -428,6 +473,7 @@ public partial class MainWindow : Window
 
     private static string FormatCompactSpeed(double bytesPerSecond)
     {
+        bytesPerSecond = NormalizeRate(bytesPerSecond);
         if (bytesPerSecond < 1024) return $"{bytesPerSecond:0} B";
         if (bytesPerSecond < 1024 * 1024) return $"{bytesPerSecond / 1024:0} K";
         if (bytesPerSecond < 1024 * 1024 * 1024) return $"{bytesPerSecond / 1024 / 1024:0.0} M";
@@ -435,6 +481,9 @@ public partial class MainWindow : Window
     }
 
     private static string TruncateTrayText(string text) => text.Length <= 63 ? text : text[..63];
+
+    private static double NormalizeRate(double value) =>
+        double.IsFinite(value) ? Math.Max(0, value) : 0;
 
     private void Window_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -447,8 +496,7 @@ public partial class MainWindow : Window
             if (element is System.Windows.Controls.Primitives.ButtonBase or Thumb or ResizeGrip) return;
         }
 
-        DragMove();
-        e.Handled = true;
+        e.Handled = TryDragMove();
     }
 
     private async void SettingsButton_Click(object sender, RoutedEventArgs e) => await OpenSettingsAsync();
@@ -488,8 +536,7 @@ public partial class MainWindow : Window
 
         _compactDragPending = false;
         CompactPanel.ReleaseMouseCapture();
-        DragMove();
-        TryDockToScreenEdge();
+        if (TryDragMove()) TryDockToScreenEdge();
         e.Handled = true;
     }
 
@@ -500,22 +547,34 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private bool TryDragMove()
+    {
+        try
+        {
+            DragMove();
+            return true;
+        }
+        catch (InvalidOperationException exception)
+        {
+            AppDiagnostics.Log("拖动悬浮窗失败。", exception);
+            return false;
+        }
+    }
+
     private void TryDockToScreenEdge()
     {
-        if (_isEdgeDocked || !_settings.CompactMode || !_settings.AutoHideAtScreenEdge
-            || DateTime.UtcNow < _suppressEdgeDockUntil) return;
+        if (_isEdgeDocked || !IsVisible || WindowState != WindowState.Normal
+            || !_settings.CompactMode || !_settings.AutoHideAtScreenEdge
+            || Stopwatch.GetTimestamp() < _suppressEdgeDockUntilTimestamp) return;
         var area = GetCurrentWorkingArea();
-        var distances = new Dictionary<DockEdge, double>
-        {
-            [DockEdge.Left] = Math.Abs(Left - area.Left),
-            [DockEdge.Right] = Math.Abs(area.Right - (Left + ActualWidth)),
-            [DockEdge.Top] = Math.Abs(Top - area.Top),
-            [DockEdge.Bottom] = Math.Abs(area.Bottom - (Top + ActualHeight))
-        };
-        var nearest = distances.MinBy(pair => pair.Value);
-        if (nearest.Value > DockThreshold) return;
+        var nearestEdge = DockEdge.Left;
+        var nearestDistance = Math.Abs(Left - area.Left);
+        SelectNearerEdge(DockEdge.Right, Math.Abs(area.Right - (Left + ActualWidth)));
+        SelectNearerEdge(DockEdge.Top, Math.Abs(Top - area.Top));
+        SelectNearerEdge(DockEdge.Bottom, Math.Abs(area.Bottom - (Top + ActualHeight)));
+        if (nearestDistance > DockThreshold) return;
 
-        _dockedEdge = nearest.Key;
+        _dockedEdge = nearestEdge;
         _dockAnchor = _dockedEdge is DockEdge.Left or DockEdge.Right
             ? Top + ActualHeight / 2
             : Left + ActualWidth / 2;
@@ -523,6 +582,13 @@ public partial class MainWindow : Window
         CompactPanel.Visibility = Visibility.Collapsed;
         DockedStripPanel.Visibility = Visibility.Visible;
         ApplyDockedDimensions(area);
+
+        void SelectNearerEdge(DockEdge edge, double distance)
+        {
+            if (distance >= nearestDistance) return;
+            nearestEdge = edge;
+            nearestDistance = distance;
+        }
     }
 
     private void ApplyDockedDimensions(Rect area)
@@ -560,7 +626,7 @@ public partial class MainWindow : Window
         var edge = _dockedEdge;
         var anchor = _dockAnchor;
         _isEdgeDocked = false;
-        _suppressEdgeDockUntil = DateTime.UtcNow.AddSeconds(1);
+        _suppressEdgeDockUntilTimestamp = Stopwatch.GetTimestamp() + Stopwatch.Frequency;
         ApplyWindowMode();
 
         var area = GetCurrentWorkingArea();
@@ -600,6 +666,7 @@ public partial class MainWindow : Window
 
     private void MinimizeToTray()
     {
+        _edgeDockTimer.Stop();
         Hide();
         WindowState = WindowState.Normal;
     }
@@ -619,12 +686,16 @@ public partial class MainWindow : Window
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(RegistryRunPath, writable: true)
-                ?? Registry.CurrentUser.CreateSubKey(RegistryRunPath, writable: true);
+                ?? Registry.CurrentUser.CreateSubKey(RegistryRunPath, writable: true)
+                ?? throw new InvalidOperationException("无法打开 Windows 开机启动注册表项。");
             if (enabled)
             {
                 var processPath = Environment.ProcessPath
                     ?? Process.GetCurrentProcess().MainModule?.FileName
                     ?? throw new InvalidOperationException("无法确定程序路径。");
+                processPath = System.IO.Path.GetFullPath(processPath);
+                if (!System.IO.File.Exists(processPath))
+                    throw new System.IO.FileNotFoundException("找不到当前程序文件。", processPath);
                 key.SetValue(RegistryValueName, $"\"{processPath}\"");
             }
             else
@@ -635,6 +706,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
+            AppDiagnostics.Log("修改开机启动设置失败。", exception);
             System.Windows.MessageBox.Show($"修改开机启动失败：\n\n{exception.Message}", "CPU 网速悬浮窗",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
@@ -648,27 +720,34 @@ public partial class MainWindow : Window
             using var key = Registry.CurrentUser.OpenSubKey(RegistryRunPath);
             return key?.GetValue(RegistryValueName) is string;
         }
-        catch { return false; }
+        catch (Exception exception)
+        {
+            AppDiagnostics.Log("读取开机启动设置失败。", exception);
+            return false;
+        }
     }
 
     private void KeepInsideWorkingArea()
     {
         var area = GetCurrentWorkingArea();
-        if (double.IsNaN(Left) || Left < area.Left || Left + Width > area.Right)
-            Left = area.Right - Width - 24;
-        if (double.IsNaN(Top) || Top < area.Top || Top + Height > area.Bottom)
-            Top = area.Top + 24;
+        var maxLeft = Math.Max(area.Left, area.Right - Width);
+        var maxTop = Math.Max(area.Top, area.Bottom - Height);
+        var desiredLeft = double.IsFinite(Left) ? Left : area.Right - Width - 24;
+        var desiredTop = double.IsFinite(Top) ? Top : area.Top + 24;
+        Left = Math.Clamp(desiredLeft, area.Left, maxLeft);
+        Top = Math.Clamp(desiredTop, area.Top, maxTop);
     }
 
     private Rect GetCurrentWorkingArea()
     {
         var handle = new WindowInteropHelper(this).Handle;
         var bounds = Forms.Screen.FromHandle(handle).WorkingArea;
-        var source = PresentationSource.FromVisual(this);
-        var transform = source?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
-        var topLeft = transform.Transform(new System.Windows.Point(bounds.Left, bounds.Top));
-        var bottomRight = transform.Transform(new System.Windows.Point(bounds.Right, bounds.Bottom));
-        return new Rect(topLeft, bottomRight);
+        var dpi = VisualTreeHelper.GetDpi(this);
+        return new Rect(
+            bounds.Left / dpi.DpiScaleX,
+            bounds.Top / dpi.DpiScaleY,
+            bounds.Width / dpi.DpiScaleX,
+            bounds.Height / dpi.DpiScaleY);
     }
 
     protected override void OnClosing(CancelEventArgs e)
@@ -686,17 +765,45 @@ public partial class MainWindow : Window
 
     private void ExitApplication()
     {
+        if (_isExiting) return;
+        _isExiting = true;
         _reallyClose = true;
         _timer.Stop();
         _edgeDockTimer.Stop();
-        _temperatureReader?.Dispose();
-        _notifyIcon.Visible = false;
-        _notifyIcon.Dispose();
-        _contextMenu.Dispose();
-        Close();
-        System.Windows.Application.Current.Shutdown();
+        try
+        {
+            _temperatureReader?.Dispose();
+        }
+        catch (Exception exception)
+        {
+            AppDiagnostics.Log("释放温度监控资源失败。", exception);
+        }
+        finally
+        {
+            try
+            {
+                _notifyIcon.Visible = false;
+                _notifyIcon.Dispose();
+            }
+            catch (Exception exception)
+            {
+                AppDiagnostics.Log("释放托盘图标失败。", exception);
+            }
+            try { _contextMenu.Dispose(); }
+            catch (Exception exception) { AppDiagnostics.Log("释放托盘菜单失败。", exception); }
+            try { Close(); }
+            catch (Exception exception) { AppDiagnostics.Log("关闭主窗口失败。", exception); }
+            System.Windows.Application.Current.Shutdown();
+        }
     }
 
-    private readonly record struct HistorySample(double? Download, double? Upload);
+    private static System.Windows.Media.Brush CreateFrozenBrush(byte red, byte green, byte blue)
+    {
+        var brush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(red, green, blue));
+        brush.Freeze();
+        return brush;
+    }
+
+    private readonly record struct HistorySample(double? Download, double? Upload, long Timestamp);
     private enum DockEdge { Left, Right, Top, Bottom }
 }

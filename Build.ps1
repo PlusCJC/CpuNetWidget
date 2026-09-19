@@ -1,5 +1,6 @@
 param(
-    [switch]$FrameworkDependent
+    [switch]$FrameworkDependent,
+    [switch]$SkipPackageAudit
 )
 
 $ErrorActionPreference = 'Stop'
@@ -31,13 +32,29 @@ $sdkList = & $dotnet --list-sdks
 if (-not $sdkList) {
     throw '已找到 dotnet 运行时，但没有 .NET SDK。请安装 .NET 8 SDK 后重试。'
 }
+if (-not ($sdkList | Where-Object { $_ -match '^8\.' })) {
+    throw '未找到 .NET 8 SDK。请安装 .NET 8 SDK 后重试。'
+}
 
 # Generate a compact application icon using only built-in .NET drawing APIs.
 Add-Type -AssemblyName System.Drawing
+if (-not ('NativeIconMethods' -as [type])) {
+    Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class NativeIconMethods
+{
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool DestroyIcon(IntPtr handle);
+}
+'@
+}
 $bitmap = New-Object System.Drawing.Bitmap 64, 64
 $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
 $stream = $null
 $icon = $null
+$iconHandle = [IntPtr]::Zero
 try {
     $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $graphics.Clear([System.Drawing.Color]::FromArgb(17, 24, 39))
@@ -54,13 +71,14 @@ try {
     }
 
     $iconHandle = $bitmap.GetHicon()
-    $icon = [System.Drawing.Icon]::FromHandle($iconHandle)
+    $icon = ([System.Drawing.Icon]::FromHandle($iconHandle)).Clone()
     $stream = [System.IO.File]::Create($iconPath)
     $icon.Save($stream)
 }
 finally {
     if ($stream) { $stream.Dispose() }
     if ($icon) { $icon.Dispose() }
+    if ($iconHandle -ne [IntPtr]::Zero) { [NativeIconMethods]::DestroyIcon($iconHandle) | Out-Null }
     $graphics.Dispose()
     $bitmap.Dispose()
 }
@@ -83,6 +101,10 @@ if ($FrameworkDependent) {
 else {
     $arguments += '--self-contained'
     $arguments += 'true'
+}
+
+if ($SkipPackageAudit) {
+    $arguments += '-p:NuGetAudit=false'
 }
 
 & $dotnet @arguments

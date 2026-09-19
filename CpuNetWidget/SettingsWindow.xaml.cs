@@ -1,5 +1,4 @@
 using System.Windows;
-using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using CpuNetWidget.Monitoring;
@@ -67,8 +66,15 @@ public partial class SettingsWindow : Window
                 or System.Windows.Controls.Primitives.ScrollBar) return;
         }
 
-        DragMove();
-        e.Handled = true;
+        try
+        {
+            DragMove();
+            e.Handled = true;
+        }
+        catch (InvalidOperationException exception)
+        {
+            AppDiagnostics.Log("拖动设置窗口失败。", exception);
+        }
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)

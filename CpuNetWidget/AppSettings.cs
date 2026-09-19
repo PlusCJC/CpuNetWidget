@@ -38,19 +38,21 @@ internal sealed class AppSettings
             settings.CompactMode = ReadBoolean(key, nameof(CompactMode), true);
             settings.AutoHideAtScreenEdge = ReadBoolean(key, nameof(AutoHideAtScreenEdge), true);
         }
-        catch
+        catch (Exception exception)
         {
             // Invalid or inaccessible settings should never prevent startup.
+            AppDiagnostics.Log("读取注册表设置失败，已使用默认设置。", exception);
         }
 
         return settings;
     }
 
-    public void Save()
+    public bool Save()
     {
         try
         {
-            using var key = Registry.CurrentUser.CreateSubKey(RegistryPath, writable: true);
+            using var key = Registry.CurrentUser.CreateSubKey(RegistryPath, writable: true)
+                ?? throw new InvalidOperationException("无法创建设置注册表项。");
             key.SetValue(nameof(MonitorCpu), MonitorCpu ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue(nameof(MonitorTemperature), MonitorTemperature ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue(nameof(MonitorDownload), MonitorDownload ? 1 : 0, RegistryValueKind.DWord);
@@ -65,20 +67,32 @@ internal sealed class AppSettings
             if (string.IsNullOrWhiteSpace(TemperatureSensorId))
                 key.DeleteValue(nameof(TemperatureSensorId), throwOnMissingValue: false);
             else
-                key.SetValue(nameof(TemperatureSensorId), TemperatureSensorId);
+                key.SetValue(nameof(TemperatureSensorId), TemperatureSensorId, RegistryValueKind.String);
+            return true;
         }
-        catch
+        catch (Exception exception)
         {
             // Monitoring still works with in-memory settings if persistence fails.
+            AppDiagnostics.Log("保存注册表设置失败。", exception);
+            return false;
         }
     }
 
-    private static bool ReadBoolean(RegistryKey key, string name, bool defaultValue) =>
-        key.GetValue(name) is int value ? value != 0 : defaultValue;
+    private static bool ReadBoolean(RegistryKey key, string name, bool defaultValue) => key.GetValue(name) switch
+    {
+        int value => value != 0,
+        long value => value != 0,
+        _ => defaultValue
+    };
 
     private static int ReadChartRange(RegistryKey key)
     {
-        var value = key.GetValue(nameof(ChartRangeMinutes)) is int minutes ? minutes : 1;
+        var value = key.GetValue(nameof(ChartRangeMinutes)) switch
+        {
+            int minutes => minutes,
+            long minutes when minutes is >= int.MinValue and <= int.MaxValue => (int)minutes,
+            _ => 1
+        };
         return value is 1 or 5 or 10 ? value : 1;
     }
 }
