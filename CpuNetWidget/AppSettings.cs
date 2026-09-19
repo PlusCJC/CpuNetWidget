@@ -16,6 +16,7 @@ internal sealed class AppSettings
     public int ChartRangeMinutes { get; set; } = 1;
     public bool ShowNetworkChart { get; set; } = true;
     public bool CompactMode { get; set; } = true;
+    public bool AutoHideAtScreenEdge { get; set; } = true;
 
     public static AppSettings Load()
     {
@@ -35,6 +36,7 @@ internal sealed class AppSettings
             settings.ChartRangeMinutes = ReadChartRange(key);
             settings.ShowNetworkChart = ReadBoolean(key, nameof(ShowNetworkChart), true);
             settings.CompactMode = ReadBoolean(key, nameof(CompactMode), true);
+            settings.AutoHideAtScreenEdge = ReadBoolean(key, nameof(AutoHideAtScreenEdge), true);
         }
         catch
         {
@@ -58,6 +60,7 @@ internal sealed class AppSettings
             key.SetValue(nameof(ChartRangeMinutes), ChartRangeMinutes, RegistryValueKind.DWord);
             key.SetValue(nameof(ShowNetworkChart), ShowNetworkChart ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue(nameof(CompactMode), CompactMode ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue(nameof(AutoHideAtScreenEdge), AutoHideAtScreenEdge ? 1 : 0, RegistryValueKind.DWord);
 
             if (string.IsNullOrWhiteSpace(TemperatureSensorId))
                 key.DeleteValue(nameof(TemperatureSensorId), throwOnMissingValue: false);

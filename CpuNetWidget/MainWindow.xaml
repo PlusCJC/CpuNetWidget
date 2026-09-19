@@ -176,59 +176,78 @@
         </Grid>
     </Border>
 
-    <Grid x:Name="CompactPanel" Width="122" Height="122" Visibility="Collapsed"
+    <Grid x:Name="CompactPanel" Width="98" Height="194" Visibility="Collapsed"
           MouseLeftButtonDown="CompactPanel_MouseLeftButtonDown"
           MouseLeftButtonUp="CompactPanel_MouseLeftButtonUp"
           MouseMove="CompactPanel_MouseMove"
           MouseRightButtonUp="CompactPanel_MouseRightButtonUp">
-        <Ellipse Fill="#111827" Stroke="#3B465A" StrokeThickness="1">
-            <Ellipse.Effect>
+        <Border CornerRadius="28" Background="#111827" BorderBrush="#3B465A" BorderThickness="1">
+            <Border.Effect>
                 <DropShadowEffect Color="#000000" BlurRadius="20" ShadowDepth="4" Opacity="0.5" />
-            </Ellipse.Effect>
-        </Ellipse>
-        <Ellipse Width="106" Height="106" Stroke="#29374A" StrokeThickness="5" />
-        <Path x:Name="CompactCpuArc" Width="122" Height="122" Stroke="#54D6A7"
-              StrokeThickness="5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-              IsHitTestVisible="False" />
+            </Border.Effect>
+        </Border>
 
-        <Grid Margin="18,13,18,12" IsHitTestVisible="False">
+        <Grid Margin="12,10,12,11" IsHitTestVisible="False">
             <Grid.RowDefinitions>
-                <RowDefinition Height="18" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="25" />
+                <RowDefinition Height="70" />
+                <RowDefinition Height="6" />
+                <RowDefinition Height="24" />
+                <RowDefinition Height="6" />
+                <RowDefinition Height="1" />
+                <RowDefinition Height="6" />
+                <RowDefinition Height="28" />
+                <RowDefinition Height="4" />
+                <RowDefinition Height="28" />
             </Grid.RowDefinitions>
 
-            <Border Grid.Row="0" HorizontalAlignment="Right" CornerRadius="5"
-                    Background="#D9111827" Padding="3,0" Margin="0,1,1,0">
-                <TextBlock x:Name="CompactTemperatureText" Text="--°" FontSize="9.5"
-                           Foreground="#FF9A9A" VerticalAlignment="Center" />
-            </Border>
-            <Ellipse Grid.Row="0" Width="7" Height="7" Fill="#54D6A7"
-                     HorizontalAlignment="Left" VerticalAlignment="Top" Margin="2,3,0,0" />
-
-            <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center">
-                <TextBlock Text="CPU" FontSize="9" Foreground="#8795AA" HorizontalAlignment="Center" />
-                <TextBlock x:Name="CompactCpuText" Text="--%" FontSize="22" FontWeight="SemiBold"
-                           Foreground="White" HorizontalAlignment="Center" Margin="0,-2,0,0" />
-            </StackPanel>
-
-            <Grid Grid.Row="2">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0" HorizontalAlignment="Center">
-                    <TextBlock Text="↓ 下载" FontSize="8" Foreground="#74B9FF" HorizontalAlignment="Center" />
-                    <TextBlock x:Name="CompactDownloadText" Text="0 B" FontSize="9.5"
-                               Foreground="#CFE8FF" HorizontalAlignment="Center" />
-                </StackPanel>
-                <StackPanel Grid.Column="1" HorizontalAlignment="Center">
-                    <TextBlock Text="↑ 上传" FontSize="8" Foreground="#FFB86C" HorizontalAlignment="Center" />
-                    <TextBlock x:Name="CompactUploadText" Text="0 B" FontSize="9.5"
-                               Foreground="#FFE0BD" HorizontalAlignment="Center" />
+            <Grid Grid.Row="0" Width="70" Height="70">
+                <Ellipse Width="64" Height="64" Stroke="#29374A" StrokeThickness="5" />
+                <Path x:Name="CompactCpuArc" Width="70" Height="70" Stroke="#54D6A7"
+                      StrokeThickness="5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <TextBlock Text="CPU" FontSize="8.5" Foreground="#8795AA" HorizontalAlignment="Center" />
+                    <TextBlock x:Name="CompactCpuText" Text="--%" FontSize="19" FontWeight="SemiBold"
+                               Foreground="White" HorizontalAlignment="Center" Margin="0,-2,0,0" />
                 </StackPanel>
             </Grid>
+
+            <Border Grid.Row="2" CornerRadius="7" Background="#1A2535" Padding="7,3">
+                <Grid>
+                    <TextBlock Text="温度" FontSize="9" Foreground="#9AA8BC" />
+                    <TextBlock x:Name="CompactTemperatureText" Text="--°" FontSize="10"
+                               Foreground="#FF9A9A" FontWeight="SemiBold" HorizontalAlignment="Right" />
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="4" Background="#2D384B" />
+
+            <Border Grid.Row="6" CornerRadius="7" Background="#172538" Padding="7,3">
+                <Grid>
+                    <TextBlock Text="↓ 下载" FontSize="8.5" Foreground="#74B9FF" />
+                    <TextBlock x:Name="CompactDownloadText" Text="0 B" FontSize="9.5"
+                               Foreground="#CFE8FF" HorizontalAlignment="Right" />
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="8" CornerRadius="7" Background="#2A231B" Padding="7,3">
+                <Grid>
+                    <TextBlock Text="↑ 上传" FontSize="8.5" Foreground="#FFB86C" />
+                    <TextBlock x:Name="CompactUploadText" Text="0 B" FontSize="9.5"
+                               Foreground="#FFE0BD" HorizontalAlignment="Right" />
+                </Grid>
+            </Border>
         </Grid>
+    </Grid>
+
+    <Grid x:Name="DockedStripPanel" Visibility="Collapsed"
+          MouseLeftButtonDown="DockedStripPanel_MouseLeftButtonDown"
+          ToolTip="点击恢复监控条">
+        <Border x:Name="DockedStripBorder" Background="#B9BEC7" BorderBrush="#D7DBE1"
+                BorderThickness="1" CornerRadius="7">
+            <Border.Effect>
+                <DropShadowEffect Color="#000000" BlurRadius="8" ShadowDepth="1" Opacity="0.28" />
+            </Border.Effect>
+        </Border>
     </Grid>
     </Grid>
 </Window>

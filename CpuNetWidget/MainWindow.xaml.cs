@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using System.Windows.Interop;
 using CpuNetWidget.Monitoring;
 using Microsoft.Win32;
 using Forms = System.Windows.Forms;
@@ -17,11 +18,17 @@ public partial class MainWindow : Window
 {
     private const string RegistryRunPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string RegistryValueName = "CpuNetWidget";
+    private const double CompactWidth = 98;
+    private const double CompactHeight = 194;
+    private const double DockThickness = 12;
+    private const double DockLength = 96;
+    private const double DockThreshold = 24;
 
     private readonly CpuUsageReader _cpuUsageReader = new();
     private readonly NetworkSpeedReader _networkSpeedReader = new();
     private readonly CpuTemperatureReader? _temperatureReader;
     private readonly DispatcherTimer _timer;
+    private readonly DispatcherTimer _edgeDockTimer;
     private readonly Forms.NotifyIcon _notifyIcon;
     private readonly Forms.ContextMenuStrip _contextMenu;
     private readonly List<HistorySample> _history = [];
@@ -32,6 +39,10 @@ public partial class MainWindow : Window
     private double _expandedWindowWidth = 390;
     private bool _compactDragPending;
     private System.Windows.Point _compactDragStart;
+    private bool _isEdgeDocked;
+    private DockEdge _dockedEdge;
+    private double _dockAnchor;
+    private DateTime _suppressEdgeDockUntil;
     private int HistoryCapacity => _settings.ChartRangeMinutes * 60;
 
     public MainWindow()
@@ -71,6 +82,22 @@ public partial class MainWindow : Window
 
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += async (_, _) => await RefreshMetricsAsync();
+
+        _edgeDockTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(220)
+        };
+        _edgeDockTimer.Tick += (_, _) =>
+        {
+            _edgeDockTimer.Stop();
+            TryDockToScreenEdge();
+        };
+        LocationChanged += (_, _) =>
+        {
+            if (!IsLoaded || !_settings.CompactMode || _isEdgeDocked) return;
+            _edgeDockTimer.Stop();
+            _edgeDockTimer.Start();
+        };
 
         Loaded += async (_, _) =>
         {
@@ -164,7 +191,7 @@ public partial class MainWindow : Window
             ? FormatCompactSpeed(network.Value.UploadBytesPerSecond) : "--";
 
         UpdateCompactCpuArc(_settings.MonitorCpu ? cpuUsage : null);
-        CompactPanel.ToolTip = $"双击展开完整面板\nCPU {CompactCpuText.Text}  温度 {CompactTemperatureText.Text}\n" +
+        CompactPanel.ToolTip = $"拖到屏幕边缘可自动收起，双击展开完整面板\nCPU {CompactCpuText.Text}  温度 {CompactTemperatureText.Text}\n" +
                                $"下载 {CompactDownloadText.Text}/s  上传 {CompactUploadText.Text}/s";
     }
 
@@ -178,8 +205,8 @@ public partial class MainWindow : Window
 
         var value = Math.Clamp(usage.Value, 0, 100);
         var angle = Math.Min(359.99, value * 3.6);
-        const double center = 61;
-        const double radius = 52;
+        const double center = 35;
+        const double radius = 29;
         var start = new System.Windows.Point(center, center - radius);
         var radians = (angle - 90) * Math.PI / 180;
         var end = new System.Windows.Point(
@@ -235,18 +262,28 @@ public partial class MainWindow : Window
 
     private void ApplyWindowMode()
     {
-        FullPanel.Visibility = _settings.CompactMode ? Visibility.Collapsed : Visibility.Visible;
-        CompactPanel.Visibility = _settings.CompactMode ? Visibility.Visible : Visibility.Collapsed;
+        if (!_settings.CompactMode || !_settings.AutoHideAtScreenEdge) _isEdgeDocked = false;
+        FullPanel.Visibility = !_settings.CompactMode ? Visibility.Visible : Visibility.Collapsed;
+        CompactPanel.Visibility = _settings.CompactMode && !_isEdgeDocked
+            ? Visibility.Visible : Visibility.Collapsed;
+        DockedStripPanel.Visibility = _settings.CompactMode && _isEdgeDocked
+            ? Visibility.Visible : Visibility.Collapsed;
         if (!IsLoaded) return;
+
+        if (_isEdgeDocked)
+        {
+            ApplyDockedDimensions(GetCurrentWorkingArea());
+            return;
+        }
 
         if (_settings.CompactMode)
         {
             if (Width >= 350) _expandedWindowWidth = Width;
             ResizeMode = ResizeMode.NoResize;
-            MinWidth = 122;
-            MinHeight = 122;
-            Width = 122;
-            Height = 122;
+            MinWidth = CompactWidth;
+            MinHeight = CompactHeight;
+            Width = CompactWidth;
+            Height = CompactHeight;
         }
         else
         {
@@ -260,6 +297,7 @@ public partial class MainWindow : Window
 
     private void SetCompactMode(bool compact)
     {
+        if (!compact) _isEdgeDocked = false;
         _settings.CompactMode = compact;
         _settings.Save();
         ApplyWindowMode();
@@ -450,6 +488,7 @@ public partial class MainWindow : Window
         _compactDragPending = false;
         CompactPanel.ReleaseMouseCapture();
         DragMove();
+        TryDockToScreenEdge();
         e.Handled = true;
     }
 
@@ -457,6 +496,92 @@ public partial class MainWindow : Window
     {
         _compactDragPending = false;
         CompactPanel.ReleaseMouseCapture();
+        e.Handled = true;
+    }
+
+    private void TryDockToScreenEdge()
+    {
+        if (_isEdgeDocked || !_settings.CompactMode || !_settings.AutoHideAtScreenEdge
+            || DateTime.UtcNow < _suppressEdgeDockUntil) return;
+        var area = GetCurrentWorkingArea();
+        var distances = new Dictionary<DockEdge, double>
+        {
+            [DockEdge.Left] = Math.Abs(Left - area.Left),
+            [DockEdge.Right] = Math.Abs(area.Right - (Left + ActualWidth)),
+            [DockEdge.Top] = Math.Abs(Top - area.Top),
+            [DockEdge.Bottom] = Math.Abs(area.Bottom - (Top + ActualHeight))
+        };
+        var nearest = distances.MinBy(pair => pair.Value);
+        if (nearest.Value > DockThreshold) return;
+
+        _dockedEdge = nearest.Key;
+        _dockAnchor = _dockedEdge is DockEdge.Left or DockEdge.Right
+            ? Top + ActualHeight / 2
+            : Left + ActualWidth / 2;
+        _isEdgeDocked = true;
+        CompactPanel.Visibility = Visibility.Collapsed;
+        DockedStripPanel.Visibility = Visibility.Visible;
+        ApplyDockedDimensions(area);
+    }
+
+    private void ApplyDockedDimensions(Rect area)
+    {
+        ResizeMode = ResizeMode.NoResize;
+        if (_dockedEdge is DockEdge.Left or DockEdge.Right)
+        {
+            MinWidth = DockThickness;
+            MinHeight = DockLength;
+            Width = DockThickness;
+            Height = DockLength;
+            Top = Math.Clamp(_dockAnchor - DockLength / 2, area.Top, area.Bottom - DockLength);
+            Left = _dockedEdge == DockEdge.Left ? area.Left : area.Right - DockThickness;
+            DockedStripBorder.CornerRadius = _dockedEdge == DockEdge.Left
+                ? new CornerRadius(0, 7, 7, 0)
+                : new CornerRadius(7, 0, 0, 7);
+        }
+        else
+        {
+            MinWidth = DockLength;
+            MinHeight = DockThickness;
+            Width = DockLength;
+            Height = DockThickness;
+            Left = Math.Clamp(_dockAnchor - DockLength / 2, area.Left, area.Right - DockLength);
+            Top = _dockedEdge == DockEdge.Top ? area.Top : area.Bottom - DockThickness;
+            DockedStripBorder.CornerRadius = _dockedEdge == DockEdge.Top
+                ? new CornerRadius(0, 0, 7, 7)
+                : new CornerRadius(7, 7, 0, 0);
+        }
+    }
+
+    private void DockedStripPanel_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ButtonState != MouseButtonState.Pressed) return;
+        var edge = _dockedEdge;
+        var anchor = _dockAnchor;
+        _isEdgeDocked = false;
+        _suppressEdgeDockUntil = DateTime.UtcNow.AddSeconds(1);
+        ApplyWindowMode();
+
+        var area = GetCurrentWorkingArea();
+        switch (edge)
+        {
+            case DockEdge.Left:
+                Left = area.Left + 16;
+                Top = Math.Clamp(anchor - CompactHeight / 2, area.Top, area.Bottom - CompactHeight);
+                break;
+            case DockEdge.Right:
+                Left = area.Right - CompactWidth - 16;
+                Top = Math.Clamp(anchor - CompactHeight / 2, area.Top, area.Bottom - CompactHeight);
+                break;
+            case DockEdge.Top:
+                Left = Math.Clamp(anchor - CompactWidth / 2, area.Left, area.Right - CompactWidth);
+                Top = area.Top + 16;
+                break;
+            case DockEdge.Bottom:
+                Left = Math.Clamp(anchor - CompactWidth / 2, area.Left, area.Right - CompactWidth);
+                Top = area.Bottom - CompactHeight - 16;
+                break;
+        }
         e.Handled = true;
     }
 
@@ -527,11 +652,22 @@ public partial class MainWindow : Window
 
     private void KeepInsideWorkingArea()
     {
-        var area = SystemParameters.WorkArea;
+        var area = GetCurrentWorkingArea();
         if (double.IsNaN(Left) || Left < area.Left || Left + Width > area.Right)
             Left = area.Right - Width - 24;
         if (double.IsNaN(Top) || Top < area.Top || Top + Height > area.Bottom)
             Top = area.Top + 24;
+    }
+
+    private Rect GetCurrentWorkingArea()
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        var bounds = Forms.Screen.FromHandle(handle).WorkingArea;
+        var source = PresentationSource.FromVisual(this);
+        var transform = source?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
+        var topLeft = transform.Transform(new System.Windows.Point(bounds.Left, bounds.Top));
+        var bottomRight = transform.Transform(new System.Windows.Point(bounds.Right, bounds.Bottom));
+        return new Rect(topLeft, bottomRight);
     }
 
     protected override void OnClosing(CancelEventArgs e)
@@ -551,6 +687,7 @@ public partial class MainWindow : Window
     {
         _reallyClose = true;
         _timer.Stop();
+        _edgeDockTimer.Stop();
         _temperatureReader?.Dispose();
         _notifyIcon.Visible = false;
         _notifyIcon.Dispose();
@@ -560,4 +697,5 @@ public partial class MainWindow : Window
     }
 
     private readonly record struct HistorySample(double? Download, double? Upload);
+    private enum DockEdge { Left, Right, Top, Bottom }
 }

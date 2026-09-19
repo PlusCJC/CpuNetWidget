@@ -27,6 +27,7 @@ public partial class SettingsWindow : Window
         TopmostCheckBox.IsChecked = settings.AlwaysOnTop;
         AutoStartCheckBox.IsChecked = autoStartEnabled;
         CompactModeCheckBox.IsChecked = settings.CompactMode;
+        AutoHideAtScreenEdgeCheckBox.IsChecked = settings.AutoHideAtScreenEdge;
         ShowNetworkChartCheckBox.IsChecked = settings.ShowNetworkChart;
         ChartRange1Radio.IsChecked = settings.ChartRangeMinutes == 1;
         ChartRange5Radio.IsChecked = settings.ChartRangeMinutes == 5;
@@ -100,6 +101,7 @@ public partial class SettingsWindow : Window
             AlwaysOnTop = TopmostCheckBox.IsChecked == true,
             ShowNetworkChart = ShowNetworkChartCheckBox.IsChecked == true,
             CompactMode = CompactModeCheckBox.IsChecked == true,
+            AutoHideAtScreenEdge = AutoHideAtScreenEdgeCheckBox.IsChecked == true,
             ChartRangeMinutes = ChartRange10Radio.IsChecked == true ? 10
                 : ChartRange5Radio.IsChecked == true ? 5 : 1
         };
