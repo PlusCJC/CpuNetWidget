@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -276,9 +277,18 @@ public partial class MainWindow : Window
 
     private static string TruncateTrayText(string text) => text.Length <= 63 ? text : text[..63];
 
-    private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private void Window_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ButtonState == MouseButtonState.Pressed) DragMove();
+        if (e.ButtonState != MouseButtonState.Pressed) return;
+
+        for (var element = e.OriginalSource as DependencyObject; element is not null;
+             element = VisualTreeHelper.GetParent(element))
+        {
+            if (element is System.Windows.Controls.Primitives.ButtonBase or Thumb or ResizeGrip) return;
+        }
+
+        DragMove();
+        e.Handled = true;
     }
 
     private void MenuButton_Click(object sender, RoutedEventArgs e)
@@ -290,6 +300,8 @@ public partial class MainWindow : Window
     private void ChartCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => RenderChart();
 
     private void MinimizeToTray_Click(object sender, RoutedEventArgs e) => MinimizeToTray();
+
+    private void ExitButton_Click(object sender, RoutedEventArgs e) => ExitApplication();
 
     private void MainWindow_StateChanged(object? sender, EventArgs e)
     {

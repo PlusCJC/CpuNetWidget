@@ -10,6 +10,7 @@
         ResizeMode="CanResizeWithGrip"
         ShowInTaskbar="False"
         StateChanged="MainWindow_StateChanged"
+        PreviewMouseLeftButtonDown="Window_PreviewMouseLeftButtonDown"
         Topmost="True">
     <Window.Resources>
         <Style TargetType="TextBlock">
@@ -28,6 +29,31 @@
             <Setter Property="Foreground" Value="#54D6A7" />
             <Setter Property="BorderThickness" Value="0" />
         </Style>
+        <Style x:Key="TitleButton" TargetType="Button">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Foreground" Value="#B8C2D4" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder" CornerRadius="6" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#344056" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#46536A" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Border CornerRadius="16" BorderBrush="#3B465A" BorderThickness="1"
@@ -45,9 +71,10 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <Grid Grid.Row="0" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+            <Grid Grid.Row="0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
@@ -55,12 +82,12 @@
                     <Ellipse Width="9" Height="9" Fill="#54D6A7" Margin="0,5,9,0" />
                     <TextBlock Text="系统状态" FontSize="14" FontWeight="SemiBold" />
                 </StackPanel>
-                <Button Grid.Column="1" Width="28" Height="24" Content="—" FontSize="13"
-                        Foreground="#B8C2D4" Background="Transparent" BorderThickness="0"
-                        Cursor="Hand" ToolTip="最小化到系统托盘" Click="MinimizeToTray_Click" />
-                <Button Grid.Column="2" Width="30" Height="24" Content="⚙" FontSize="15"
-                        Foreground="#B8C2D4" Background="Transparent" BorderThickness="0"
-                        Cursor="Hand" ToolTip="设置与菜单" Click="MenuButton_Click" />
+                <Button Grid.Column="1" Content="—" FontSize="13" Style="{StaticResource TitleButton}"
+                        ToolTip="最小化到系统托盘" Click="MinimizeToTray_Click" />
+                <Button Grid.Column="2" Content="⚙" FontSize="15" Style="{StaticResource TitleButton}"
+                        ToolTip="设置与菜单" Click="MenuButton_Click" />
+                <Button Grid.Column="3" Content="×" FontSize="17" Foreground="#FF8A8A"
+                        Style="{StaticResource TitleButton}" ToolTip="退出程序" Click="ExitButton_Click" />
             </Grid>
 
             <Grid Grid.Row="1">

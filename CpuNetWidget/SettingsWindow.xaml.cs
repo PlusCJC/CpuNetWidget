@@ -1,4 +1,7 @@
 using System.Windows;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
+using System.Windows.Media;
 using CpuNetWidget.Monitoring;
 
 namespace CpuNetWidget;
@@ -52,6 +55,26 @@ public partial class SettingsWindow : Window
     }
 
     private void TemperatureMonitoring_Changed(object sender, RoutedEventArgs e) => UpdateTemperatureControls();
+
+    private void Window_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ButtonState != MouseButtonState.Pressed) return;
+
+        for (var element = e.OriginalSource as DependencyObject; element is not null;
+             element = VisualTreeHelper.GetParent(element))
+        {
+            if (element is System.Windows.Controls.Primitives.ButtonBase or System.Windows.Controls.ComboBox
+                or System.Windows.Controls.Primitives.ScrollBar) return;
+        }
+
+        DragMove();
+        e.Handled = true;
+    }
+
+    private void CloseButton_Click(object sender, RoutedEventArgs e)
+    {
+        DialogResult = false;
+    }
 
     private void UpdateTemperatureControls()
     {
