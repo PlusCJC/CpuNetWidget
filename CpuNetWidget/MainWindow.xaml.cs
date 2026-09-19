@@ -21,8 +21,7 @@ public partial class MainWindow : Window
     private const double CompactHeight = 228;
     private const double DockThickness = 7;
     private const double DockLength = 50;
-    private const double DockThreshold = 24;
-    private const double RestoreInset = DockThreshold + 8;
+    private const double RestoreInset = 32;
     private static readonly System.Windows.Media.Brush CpuNormalBrush = CreateFrozenBrush(84, 214, 167);
     private static readonly System.Windows.Media.Brush WarningBrush = CreateFrozenBrush(255, 184, 108);
     private static readonly System.Windows.Media.Brush CriticalBrush = CreateFrozenBrush(255, 92, 92);
@@ -566,28 +565,33 @@ public partial class MainWindow : Window
         if (_isEdgeDocked || !IsVisible || WindowState != WindowState.Normal
             || !_settings.CompactMode || !_settings.AutoHideAtScreenEdge
             || Stopwatch.GetTimestamp() < _suppressEdgeDockUntilTimestamp) return;
-        var area = GetCurrentWorkingArea();
-        var nearestEdge = DockEdge.Left;
-        var nearestDistance = Math.Abs(Left - area.Left);
-        SelectNearerEdge(DockEdge.Right, Math.Abs(area.Right - (Left + ActualWidth)));
-        SelectNearerEdge(DockEdge.Top, Math.Abs(Top - area.Top));
-        SelectNearerEdge(DockEdge.Bottom, Math.Abs(area.Bottom - (Top + ActualHeight)));
-        if (nearestDistance > DockThreshold) return;
 
-        _dockedEdge = nearestEdge;
+        var area = GetCurrentWorkingArea();
+        var width = ActualWidth > 0 && double.IsFinite(ActualWidth) ? ActualWidth : CompactWidth;
+        var height = ActualHeight > 0 && double.IsFinite(ActualHeight) ? ActualHeight : CompactHeight;
+        var exceededEdge = DockEdge.Left;
+        var greatestOverflow = 0d;
+
+        SelectExceededEdge(DockEdge.Left, area.Left - Left);
+        SelectExceededEdge(DockEdge.Right, Left + width - area.Right);
+        SelectExceededEdge(DockEdge.Top, area.Top - Top);
+        SelectExceededEdge(DockEdge.Bottom, Top + height - area.Bottom);
+        if (greatestOverflow <= 0) return;
+
+        _dockedEdge = exceededEdge;
         _dockAnchor = _dockedEdge is DockEdge.Left or DockEdge.Right
-            ? Top + ActualHeight / 2
-            : Left + ActualWidth / 2;
+            ? Top + height / 2
+            : Left + width / 2;
         _isEdgeDocked = true;
         CompactPanel.Visibility = Visibility.Collapsed;
         DockedStripPanel.Visibility = Visibility.Visible;
         ApplyDockedDimensions(area);
 
-        void SelectNearerEdge(DockEdge edge, double distance)
+        void SelectExceededEdge(DockEdge edge, double overflow)
         {
-            if (distance >= nearestDistance) return;
-            nearestEdge = edge;
-            nearestDistance = distance;
+            if (!double.IsFinite(overflow) || overflow <= greatestOverflow) return;
+            exceededEdge = edge;
+            greatestOverflow = overflow;
         }
     }
 
