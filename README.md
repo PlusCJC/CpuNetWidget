@@ -1,0 +1,64 @@
+# CPU 网速悬浮窗
+
+一个使用 C# / WPF 编写的 Windows 桌面小组件，实时显示：
+
+- CPU 使用率
+- CPU 温度
+- 当前下载速率
+- 当前上传速率
+- 最近 90 秒实时曲线
+- 各监控项目独立开关
+- 自动或手动选择温度传感器
+
+## 使用已经编译好的程序
+
+运行 `publish\CpuNetWidget.exe`。程序默认置顶；点击右上角齿轮或右键托盘图标可以：
+
+- 显示悬浮窗
+- 隐藏悬浮窗
+- 打开独立设置界面
+- 退出程序
+
+点击关闭时程序会隐藏到系统托盘，不会直接退出。
+
+设置界面包含：
+
+- CPU 使用率、CPU 温度、下载和上传的独立开关（首次运行默认全部打开）；
+- 温度传感器选择，默认自动选择；
+- 是否启动时请求管理员权限，默认关闭；
+- 窗口置顶和开机自动启动。
+
+## 自己编译
+
+要求：Windows 10/11 x64、.NET 8 SDK。
+
+在 PowerShell 中运行：
+
+```powershell
+.\Build.ps1
+```
+
+脚本会发布一个包含 .NET 运行时的单文件版本：
+
+```text
+publish\CpuNetWidget.exe
+```
+
+如果希望生成体积更小、依赖本机 .NET 8 Desktop Runtime 的版本：
+
+```powershell
+.\Build.ps1 -FrameworkDependent
+```
+
+## 温度读取说明
+
+温度传感器优先通过 `LibreHardwareMonitorLib` 读取，无硬件数据时回退到 Windows ACPI 温区。由于硬件和主板固件存在差异：
+
+- 少部分电脑需要在设置中启用“启动时请求管理员权限”才能读取 CPU Package；
+- 某些主板不对 Windows 暴露 CPU 温度，此时界面会显示 `--°C`；
+- CPU 使用率与网络速率无需管理员权限。
+
+启用高权限后，程序下次启动会显示标准 Windows UAC 确认；关闭后不会请求管理员权限。当前温度来源会直接显示在温度数值下方。
+
+`LibreHardwareMonitorLib` 使用 Mozilla Public License 2.0，项目地址：
+https://github.com/LibreHardwareMonitor/LibreHardwareMonitor

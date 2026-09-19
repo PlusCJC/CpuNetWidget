@@ -1,0 +1,9 @@
+CPU 网速悬浮窗使用以下第三方组件：
+
+LibreHardwareMonitorLib 0.9.6
+Copyright (C) LibreHardwareMonitor contributors
+License: Mozilla Public License 2.0
+Project: https://github.com/LibreHardwareMonitor/LibreHardwareMonitor
+License text: https://www.mozilla.org/MPL/2.0/
+
+该组件用于读取 CPU 硬件温度传感器。

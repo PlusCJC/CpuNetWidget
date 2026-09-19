@@ -1,0 +1,9 @@
+.dotnet/
+.dotnet-home/
+.packages/
+.tools/
+CpuNetWidget/bin/
+CpuNetWidget/obj/
+Diagnostics/**/bin/
+Diagnostics/**/obj/
+publish/
