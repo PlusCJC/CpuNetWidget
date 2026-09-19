@@ -49,6 +49,21 @@
                     </UniformGrid>
                 </GroupBox>
 
+                <GroupBox Header="实时曲线">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="180" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="曲线时间范围" Foreground="#374151" />
+                            <TextBlock Text="采样间隔为 1 秒" FontSize="11" Foreground="#6B7280" Margin="0,3,0,0" />
+                        </StackPanel>
+                        <ComboBox x:Name="ChartRangeComboBox" Grid.Column="1" Height="34"
+                                  DisplayMemberPath="DisplayName" SelectedValuePath="Minutes" />
+                    </Grid>
+                </GroupBox>
+
                 <GroupBox Header="温度读取">
                     <StackPanel>
                         <TextBlock Text="温度传感器" Foreground="#374151" Margin="0,0,0,6" />

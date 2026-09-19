@@ -16,7 +16,6 @@ public partial class MainWindow : Window
 {
     private const string RegistryRunPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string RegistryValueName = "CpuNetWidget";
-    private const int MaximumHistory = 90;
 
     private readonly CpuUsageReader _cpuUsageReader = new();
     private readonly NetworkSpeedReader _networkSpeedReader = new();
@@ -28,6 +27,7 @@ public partial class MainWindow : Window
     private AppSettings _settings;
     private bool _reallyClose;
     private int _updateInProgress;
+    private int HistoryCapacity => _settings.ChartRangeMinutes * 60;
 
     public MainWindow()
     {
@@ -171,7 +171,7 @@ public partial class MainWindow : Window
     private void AddHistory(HistorySample sample)
     {
         _history.Add(sample);
-        if (_history.Count > MaximumHistory) _history.RemoveAt(0);
+        if (_history.Count > HistoryCapacity) _history.RemoveAt(0);
         RenderChart();
     }
 
@@ -180,6 +180,8 @@ public partial class MainWindow : Window
         var width = ChartCanvas.ActualWidth;
         var height = ChartCanvas.ActualHeight;
         if (width <= 1 || height <= 1 || _history.Count == 0) return;
+
+        ChartTitleText.Text = $"实时曲线 · 最近 {_settings.ChartRangeMinutes} 分钟";
 
         var networkMaximum = _history
             .SelectMany(sample => new[] { sample.Download, sample.Upload })
@@ -205,12 +207,14 @@ public partial class MainWindow : Window
         Func<double, double> normalize, double width, double height)
     {
         var points = new PointCollection();
-        var leadingEmptySlots = MaximumHistory - _history.Count;
+        var leadingEmptySlots = HistoryCapacity - _history.Count;
         for (var index = 0; index < _history.Count; index++)
         {
             var value = selector(_history[index]);
             if (!value.HasValue) continue;
-            var x = (leadingEmptySlots + index) * width / (MaximumHistory - 1);
+            var x = HistoryCapacity == 1
+                ? width
+                : (leadingEmptySlots + index) * width / (HistoryCapacity - 1);
             var normalized = Math.Clamp(normalize(value.Value), 0, 1);
             points.Add(new System.Windows.Point(x, height * (1 - normalized)));
         }
@@ -284,6 +288,20 @@ public partial class MainWindow : Window
     }
 
     private void ChartCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => RenderChart();
+
+    private void MinimizeToTray_Click(object sender, RoutedEventArgs e) => MinimizeToTray();
+
+    private void MainWindow_StateChanged(object? sender, EventArgs e)
+    {
+        if (WindowState == WindowState.Minimized)
+            Dispatcher.BeginInvoke(MinimizeToTray, DispatcherPriority.Background);
+    }
+
+    private void MinimizeToTray()
+    {
+        Hide();
+        WindowState = WindowState.Normal;
+    }
 
     private void ShowWidget()
     {

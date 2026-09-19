@@ -24,6 +24,15 @@ public partial class SettingsWindow : Window
         TopmostCheckBox.IsChecked = settings.AlwaysOnTop;
         AutoStartCheckBox.IsChecked = autoStartEnabled;
 
+        var chartRanges = new[]
+        {
+            new ChartRangeChoice(1, "1 分钟"),
+            new ChartRangeChoice(5, "5 分钟"),
+            new ChartRangeChoice(10, "10 分钟")
+        };
+        ChartRangeComboBox.ItemsSource = chartRanges;
+        ChartRangeComboBox.SelectedItem = chartRanges.First(choice => choice.Minutes == settings.ChartRangeMinutes);
+
         var choices = new List<SensorChoice> { new(null, "自动选择（推荐）") };
         choices.AddRange(sensors.Select(sensor => new SensorChoice(sensor.Id, sensor.DisplayName)));
         if (!string.IsNullOrWhiteSpace(settings.TemperatureSensorId)
@@ -60,11 +69,13 @@ public partial class SettingsWindow : Window
             MonitorUpload = MonitorUploadCheckBox.IsChecked == true,
             TemperatureSensorId = (TemperatureSensorComboBox.SelectedItem as SensorChoice)?.Id,
             RunAsAdministrator = AdministratorCheckBox.IsChecked == true,
-            AlwaysOnTop = TopmostCheckBox.IsChecked == true
+            AlwaysOnTop = TopmostCheckBox.IsChecked == true,
+            ChartRangeMinutes = (ChartRangeComboBox.SelectedItem as ChartRangeChoice)?.Minutes ?? 1
         };
         AutoStartEnabled = AutoStartCheckBox.IsChecked == true;
         DialogResult = true;
     }
 
     private sealed record SensorChoice(string? Id, string DisplayName);
+    private sealed record ChartRangeChoice(int Minutes, string DisplayName);
 }

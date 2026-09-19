@@ -13,6 +13,7 @@ internal sealed class AppSettings
     public string? TemperatureSensorId { get; set; }
     public bool AlwaysOnTop { get; set; } = true;
     public bool RunAsAdministrator { get; set; }
+    public int ChartRangeMinutes { get; set; } = 1;
 
     public static AppSettings Load()
     {
@@ -29,6 +30,7 @@ internal sealed class AppSettings
             settings.TemperatureSensorId = key.GetValue(nameof(TemperatureSensorId)) as string;
             settings.AlwaysOnTop = ReadBoolean(key, nameof(AlwaysOnTop), true);
             settings.RunAsAdministrator = ReadBoolean(key, nameof(RunAsAdministrator), false);
+            settings.ChartRangeMinutes = ReadChartRange(key);
         }
         catch
         {
@@ -49,6 +51,7 @@ internal sealed class AppSettings
             key.SetValue(nameof(MonitorUpload), MonitorUpload ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue(nameof(AlwaysOnTop), AlwaysOnTop ? 1 : 0, RegistryValueKind.DWord);
             key.SetValue(nameof(RunAsAdministrator), RunAsAdministrator ? 1 : 0, RegistryValueKind.DWord);
+            key.SetValue(nameof(ChartRangeMinutes), ChartRangeMinutes, RegistryValueKind.DWord);
 
             if (string.IsNullOrWhiteSpace(TemperatureSensorId))
                 key.DeleteValue(nameof(TemperatureSensorId), throwOnMissingValue: false);
@@ -63,4 +66,10 @@ internal sealed class AppSettings
 
     private static bool ReadBoolean(RegistryKey key, string name, bool defaultValue) =>
         key.GetValue(name) is int value ? value != 0 : defaultValue;
+
+    private static int ReadChartRange(RegistryKey key)
+    {
+        var value = key.GetValue(nameof(ChartRangeMinutes)) is int minutes ? minutes : 1;
+        return value is 1 or 5 or 10 ? value : 1;
+    }
 }

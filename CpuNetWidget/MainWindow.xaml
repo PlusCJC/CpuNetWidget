@@ -9,6 +9,7 @@
         Background="Transparent"
         ResizeMode="CanResizeWithGrip"
         ShowInTaskbar="False"
+        StateChanged="MainWindow_StateChanged"
         Topmost="True">
     <Window.Resources>
         <Style TargetType="TextBlock">
@@ -48,12 +49,16 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
                     <Ellipse Width="9" Height="9" Fill="#54D6A7" Margin="0,5,9,0" />
                     <TextBlock Text="系统状态" FontSize="14" FontWeight="SemiBold" />
                 </StackPanel>
-                <Button Grid.Column="1" Width="30" Height="24" Content="⚙" FontSize="15"
+                <Button Grid.Column="1" Width="28" Height="24" Content="—" FontSize="13"
+                        Foreground="#B8C2D4" Background="Transparent" BorderThickness="0"
+                        Cursor="Hand" ToolTip="最小化到系统托盘" Click="MinimizeToTray_Click" />
+                <Button Grid.Column="2" Width="30" Height="24" Content="⚙" FontSize="15"
                         Foreground="#B8C2D4" Background="Transparent" BorderThickness="0"
                         Cursor="Hand" ToolTip="设置与菜单" Click="MenuButton_Click" />
             </Grid>
@@ -105,7 +110,8 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
                 <Grid Grid.Row="0">
-                    <TextBlock Text="实时曲线 · 最近 90 秒" FontSize="10.5" Foreground="#8E9AAE" />
+                    <TextBlock x:Name="ChartTitleText" Text="实时曲线 · 最近 1 分钟"
+                               FontSize="10.5" Foreground="#8E9AAE" />
                     <TextBlock x:Name="NetworkScaleText" HorizontalAlignment="Right" FontSize="9.5"
                                Foreground="#69768B" Text="网络峰值 --" />
                 </Grid>
