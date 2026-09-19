@@ -162,6 +162,49 @@ NuGet 官方源暂时不可访问、且已经单独完成漏洞检查时，可�
 
 构建脚本优先使用仓库中的 `.dotnet\dotnet.exe`，否则使用系统 `dotnet`。脚本会检查 .NET 8 SDK、生成应用图标、发布 EXE，并复制第三方许可证说明。
 
+## 安装与卸载
+
+仓库提供标准 Windows 安装器源码：
+
+```text
+Installer\CpuNetWidget.iss
+```
+
+安装 [Inno Setup 6](https://jrsoftware.org/isdl.php) 后，在 PowerShell 中执行：
+
+```powershell
+.\BuildSetup.ps1
+```
+
+该命令会先生成默认的自包含应用，再生成：
+
+```text
+setup\CpuNetWidget-Setup.exe
+```
+
+已有最新的 `publish` 文件时，可以只编译安装器：
+
+```powershell
+.\BuildSetup.ps1 -SkipAppBuild
+```
+
+如果 `ISCC.exe` 不在默认目录，可显式指定：
+
+```powershell
+.\BuildSetup.ps1 -IsccPath "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+```
+
+安装器默认安装到当前用户的 `%LOCALAPPDATA%\Programs\CpuNetWidget`，不要求管理员权限。安装过程中可以选择桌面快捷方式和开机启动。
+
+可从 Windows“设置 > 应用 > 已安装的应用”或开始菜单中的“卸载 CPU 网速悬浮窗”执行卸载。卸载程序会先结束正在运行的悬浮窗，然后删除：
+
+- 安装目录、开始菜单和桌面快捷方式；
+- `HKEY_CURRENT_USER\Software\CpuNetWidget` 下的全部应用设置；
+- 当前用户的 `CpuNetWidget` 开机启动项；
+- `%LOCALAPPDATA%\CpuNetWidget` 下的全部运行数据，包括 `Logs\app.log` 和轮换日志。
+
+卸载是不可恢复的；如需保留诊断日志，请在卸载前自行复制。直接运行 `publish\CpuNetWidget.exe` 属于便携使用，不会自动注册卸载入口。
+
 ## 温度诊断工具
 
 如果温度显示异常，可以运行源码中的诊断工具查看系统实际暴露的传感器：
@@ -213,6 +256,8 @@ CpuNetWidget/
   Monitoring/CpuTemperatureReader.cs 温度与 ACPI 回退
 Diagnostics/TemperatureProbe/        温度传感器诊断工具
 Build.ps1                             发布脚本
+BuildSetup.ps1                        发布应用并生成 Setup EXE
+Installer/CpuNetWidget.iss            安装、快捷方式与卸载清理规则
 THIRD-PARTY-NOTICES.txt               第三方组件说明
 SECURITY.md                           安全与隐私说明
 AUDIT.md                              最近一次代码审计记录
