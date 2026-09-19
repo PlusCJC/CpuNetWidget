@@ -170,6 +170,8 @@ NuGet 官方源暂时不可访问、且已经单独完成漏洞检查时，可�
 Installer\CpuNetWidget.iss
 ```
 
+当前安装器版本为 `1.0.1`。
+
 安装 [Inno Setup 6](https://jrsoftware.org/isdl.php) 后，在 PowerShell 中执行：
 
 ```powershell
