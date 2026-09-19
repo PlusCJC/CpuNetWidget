@@ -18,11 +18,12 @@ public partial class MainWindow : Window
 {
     private const string RegistryRunPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string RegistryValueName = "CpuNetWidget";
-    private const double CompactWidth = 98;
-    private const double CompactHeight = 194;
-    private const double DockThickness = 12;
-    private const double DockLength = 96;
+    private const double CompactWidth = 50;
+    private const double CompactHeight = 228;
+    private const double DockThickness = 7;
+    private const double DockLength = 50;
     private const double DockThreshold = 24;
+    private const double RestoreInset = DockThreshold + 8;
 
     private readonly CpuUsageReader _cpuUsageReader = new();
     private readonly NetworkSpeedReader _networkSpeedReader = new();
@@ -205,8 +206,8 @@ public partial class MainWindow : Window
 
         var value = Math.Clamp(usage.Value, 0, 100);
         var angle = Math.Min(359.99, value * 3.6);
-        const double center = 35;
-        const double radius = 29;
+        const double center = 22;
+        const double radius = 18.5;
         var start = new System.Windows.Point(center, center - radius);
         var radians = (angle - 90) * Math.PI / 180;
         var end = new System.Windows.Point(
@@ -536,8 +537,8 @@ public partial class MainWindow : Window
             Top = Math.Clamp(_dockAnchor - DockLength / 2, area.Top, area.Bottom - DockLength);
             Left = _dockedEdge == DockEdge.Left ? area.Left : area.Right - DockThickness;
             DockedStripBorder.CornerRadius = _dockedEdge == DockEdge.Left
-                ? new CornerRadius(0, 7, 7, 0)
-                : new CornerRadius(7, 0, 0, 7);
+                ? new CornerRadius(0, 5, 5, 0)
+                : new CornerRadius(5, 0, 0, 5);
         }
         else
         {
@@ -548,8 +549,8 @@ public partial class MainWindow : Window
             Left = Math.Clamp(_dockAnchor - DockLength / 2, area.Left, area.Right - DockLength);
             Top = _dockedEdge == DockEdge.Top ? area.Top : area.Bottom - DockThickness;
             DockedStripBorder.CornerRadius = _dockedEdge == DockEdge.Top
-                ? new CornerRadius(0, 0, 7, 7)
-                : new CornerRadius(7, 7, 0, 0);
+                ? new CornerRadius(0, 0, 5, 5)
+                : new CornerRadius(5, 5, 0, 0);
         }
     }
 
@@ -566,20 +567,20 @@ public partial class MainWindow : Window
         switch (edge)
         {
             case DockEdge.Left:
-                Left = area.Left + 16;
+                Left = area.Left + RestoreInset;
                 Top = Math.Clamp(anchor - CompactHeight / 2, area.Top, area.Bottom - CompactHeight);
                 break;
             case DockEdge.Right:
-                Left = area.Right - CompactWidth - 16;
+                Left = area.Right - CompactWidth - RestoreInset;
                 Top = Math.Clamp(anchor - CompactHeight / 2, area.Top, area.Bottom - CompactHeight);
                 break;
             case DockEdge.Top:
                 Left = Math.Clamp(anchor - CompactWidth / 2, area.Left, area.Right - CompactWidth);
-                Top = area.Top + 16;
+                Top = area.Top + RestoreInset;
                 break;
             case DockEdge.Bottom:
                 Left = Math.Clamp(anchor - CompactWidth / 2, area.Left, area.Right - CompactWidth);
-                Top = area.Bottom - CompactHeight - 16;
+                Top = area.Bottom - CompactHeight - RestoreInset;
                 break;
         }
         e.Handled = true;
